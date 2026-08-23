@@ -253,3 +253,31 @@ def send_document(
 
 	return {**result, "print_format": prepared["print_format"], "filename": prepared["filename"]}
 
+
+@frappe.whitelist(methods=["POST"])
+def record_correction(
+	applies_when: str,
+	correct_behaviour: str,
+	wrong_reply: str | None = None,
+	agent_run: str | None = None,
+) -> dict:
+	"""Teach the assistant not to repeat a mistake."""
+	frappe.only_for("System Manager")
+
+	contact = frappe.db.get_value("Agent Run", agent_run, "contact") if agent_run else None
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "Agent Correction",
+			"applies_when": applies_when,
+			"wrong_reply": wrong_reply,
+			"correct_behaviour": correct_behaviour,
+			"agent_run": agent_run,
+			"contact": contact,
+			"enabled": 1,
+		}
+	)
+	doc.insert()
+
+	return {"name": doc.name}
+

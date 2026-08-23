@@ -31,6 +31,11 @@ export const config = {
 
 	logLevel: process.env.BRIDGE_LOG_LEVEL || "info",
 
+	// Baileys can only decrypt media while it still holds the message object,
+	// so small audio is downloaded at arrival and inlined in the webhook.
+	// Anything larger is skipped rather than buffered.
+	inlineAudioMaxBytes: Number(process.env.BRIDGE_INLINE_AUDIO_MAX_MB || 8) * 1024 * 1024,
+
 	// A QR is only valid for about a minute; Baileys rotates it for us.
 	// Give up pairing after this many rotations so a forgotten session
 	// does not spin forever.

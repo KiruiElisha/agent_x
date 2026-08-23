@@ -74,6 +74,12 @@ def check(
 		)
 
 	policy = settings.policy_for(doctype)
+
+	if not policy:
+		# In All Documents mode anything not listed falls back to the defaults,
+		# still bounded by the forbidden list and by Frappe's own permissions.
+		policy = default_policy(settings, doctype)
+
 	if not policy:
 		return Decision(
 			False,
@@ -104,6 +110,66 @@ def check(
 	return Decision(True, needs_approval=needs_approval, policy=policy)
 
 
+class DefaultPolicy:
+	"""Stands in for a policy row when All Documents mode is on.
+
+	Reads the same field names a real row has, so nothing downstream has to
+	know which kind it received.
+	"""
+
+	def __init__(self, settings, doctype: str):
+		self.document_type = doctype
+		self.can_read = settings.all_can_read
+		self.can_create = settings.all_can_create
+		self.can_write = settings.all_can_write
+		self.can_submit = settings.all_can_submit
+		self.can_cancel = settings.all_can_cancel
+		self.can_delete = settings.all_can_delete
+		self.requires_approval = settings.all_requires_approval
+		self.max_per_day = settings.all_max_per_day
+		# No field narrowing and no print format override for unlisted doctypes;
+		# to restrict either, add an explicit row.
+		self.allowed_fields = ""
+		self.print_format = None
+		self.notes = ""
+
+	def get(self, key, default=None):
+		return getattr(self, key, default)
+
+
+def default_policy(settings, doctype: str):
+	"""The fallback permissions for a doctype nobody listed."""
+	if (settings.policy_mode or "Listed Documents Only") != "All Documents":
+		return None
+
+	if not is_automatable(doctype):
+		return None
+
+	return DefaultPolicy(settings, doctype)
+
+
+# Child tables are edited through their parent, and a Single has no list to
+# work from, so neither is a sensible thing to hand a chat assistant.
+def is_automatable(doctype: str) -> bool:
+	if doctype in FORBIDDEN_DOCTYPES:
+		return False
+
+	try:
+		meta = frappe.get_meta(doctype)
+	except Exception:
+		return False
+
+	if meta.istable:
+		return False
+
+	# Anything holding a password field is excluded whatever the mode, because
+	# a reader could ask for it by name.
+	if any(f.fieldtype == "Password" for f in meta.fields):
+		return False
+
+	return True
+
+
 def has_permission_as(user: str, doctype: str, permission: str, docname: str | None) -> bool:
 	"""Frappe's permission check, evaluated as another user."""
 	try:
@@ -121,12 +187,18 @@ def daily_limit_reached(policy, doctype: str) -> str:
 		return ""
 
 	since = add_to_date(now_datetime(), days=-1)
-	used = frappe.db.count(
-		"Agent Action",
-		{"document_type": doctype, "status": "Executed", "creation": (">", since)},
-	)
+	filters = {"status": "Executed", "creation": (">", since)}
+
+	# A listed doctype is capped on its own. The All Documents default is a
+	# single budget shared by everything unlisted, or it would be no cap at all.
+	if not isinstance(policy, DefaultPolicy):
+		filters["document_type"] = doctype
+
+	used = frappe.db.count("Agent Action", filters)
 
 	if used >= cap:
+		if isinstance(policy, DefaultPolicy):
+			return _("The daily limit of {0} automated actions has been reached.").format(cap)
 		return _("The daily limit of {0} automated actions on {1} has been reached.").format(
 			cap, doctype
 		)
@@ -158,7 +230,13 @@ def allowed_fields(policy, doctype: str, payload: dict) -> dict:
 
 def describe_for_prompt(settings) -> str:
 	"""Tell the model what it may touch, so it does not propose the impossible."""
-	if not settings.automation_enabled or not settings.doctype_policies:
+	if not settings.automation_enabled:
+		return "You cannot read or change any documents. Answer from the business context only."
+
+	if (settings.policy_mode or "Listed Documents Only") == "All Documents":
+		return describe_all_mode(settings)
+
+	if not settings.doctype_policies:
 		return "You cannot read or change any documents. Answer from the business context only."
 
 	lines = ["You may work with these document types, and nothing else:"]
@@ -174,5 +252,38 @@ def describe_for_prompt(settings) -> str:
 		if row.notes:
 			line += f"\n  Note: {row.notes}"
 		lines.append(line)
+
+	return "\n".join(lines)
+
+
+def describe_all_mode(settings) -> str:
+	"""What the assistant can reach when nothing is listed one by one."""
+	verbs = [
+		name
+		for name, (field, _perm) in OPERATIONS.items()
+		if getattr(settings, f"all_{field}", 0)
+	]
+
+	lines = [
+		"You can work with any document type in the system, as long as the user you act "
+		f"for is allowed to. On anything not named below you may: {', '.join(verbs) or 'nothing'}.",
+		"You do not know what document types exist. Use find_doctypes to look one up by name "
+		"before using it, and describe_doctype to see its fields.",
+	]
+
+	if settings.all_requires_approval:
+		lines.append("Changes to anything not named below need the customer to confirm first.")
+
+	specific = [row for row in settings.doctype_policies if row.document_type]
+	if specific:
+		lines.append("\nThese have their own rules, which override the above:")
+		for row in specific:
+			allowed = [n for n, (f, _p) in OPERATIONS.items() if row.get(f)]
+			line = f"- {row.document_type}: {', '.join(allowed) or 'nothing'}"
+			if row.requires_approval:
+				line += " (needs confirmation)"
+			if row.notes:
+				line += f"\n  Note: {row.notes}"
+			lines.append(line)
 
 	return "\n".join(lines)

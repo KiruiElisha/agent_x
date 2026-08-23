@@ -1,13 +1,13 @@
 {
  "charts": [],
- "content": "[{\"id\": \"setup\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Setup</b></span>\", \"col\": 12}}, {\"id\": \"sc_settings\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Settings\", \"col\": 3}}, {\"id\": \"sc_sessions\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sessions\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
+ "content": "[{\"id\": \"setup\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Setup</b></span>\", \"col\": 12}}, {\"id\": \"sc_settings\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Settings\", \"col\": 3}}, {\"id\": \"sc_sessions\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sessions\", \"col\": 3}}, {\"id\": \"sc_knowledge\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Knowledge\", \"col\": 3}}, {\"id\": \"sc_alerts\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Alerts\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
  "creation": "2026-08-23 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
  "for_user": "",
  "hide_custom": 0,
- "icon": "setting",
+ "icon": "setting-gear",
  "idx": 0,
  "indicator_color": "blue",
  "is_hidden": 0,
@@ -17,13 +17,14 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "All Documents",
-   "link_count": 2,
+   "link_count": 4,
    "onboard": 0,
    "type": "Card Break"
   },
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "setting-gear",
    "is_query_report": 0,
    "label": "AgentX Settings",
    "link_count": 0,
@@ -35,6 +36,7 @@
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "integration",
    "is_query_report": 0,
    "label": "WhatsApp Session",
    "link_count": 0,
@@ -42,9 +44,33 @@
    "link_type": "DocType",
    "onboard": 1,
    "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "education",
+   "is_query_report": 0,
+   "label": "Agent Knowledge",
+   "link_count": 0,
+   "link_to": "Agent Knowledge",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "notification",
+   "is_query_report": 0,
+   "label": "WhatsApp Alert",
+   "link_count": 0,
+   "link_to": "WhatsApp Alert",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-08-23 00:00:00.000000",
+ "modified": "2026-08-24 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Setup",
@@ -59,6 +85,7 @@
   {
    "color": "Blue",
    "doc_view": "",
+   "icon": "setting-gear",
    "label": "Settings",
    "link_to": "AgentX Settings",
    "type": "DocType"
@@ -66,8 +93,25 @@
   {
    "color": "Green",
    "doc_view": "",
+   "icon": "integration",
    "label": "Sessions",
    "link_to": "WhatsApp Session",
+   "type": "DocType"
+  },
+  {
+   "color": "Purple",
+   "doc_view": "",
+   "icon": "education",
+   "label": "Knowledge",
+   "link_to": "Agent Knowledge",
+   "type": "DocType"
+  },
+  {
+   "color": "Cyan",
+   "doc_view": "",
+   "icon": "notification",
+   "label": "Alerts",
+   "link_to": "WhatsApp Alert",
    "type": "DocType"
   }
  ],

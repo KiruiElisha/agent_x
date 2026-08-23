@@ -4,7 +4,7 @@ The runtime works in one neutral conversation format and this module translates
 it per provider, so adding a provider never touches the agent loop.
 
 Neutral turn shapes:
-  {"role": "user",      "text": str, "image": {"mime_type", "data"} | None}
+  {"role": "user",      "text": str, "image"/"audio": {"mime_type", "data"} | None}
   {"role": "assistant", "text": str, "tool_calls": [{"id", "name", "args"}]}
   {"role": "tool",      "id": str, "name": str, "result": dict}
 """
@@ -170,9 +170,13 @@ def gemini_turn(turn: dict) -> dict:
 		return {"role": "model", "parts": parts or [{"text": ""}]}
 
 	parts = [{"text": turn.get("text") or ""}]
-	image = turn.get("image")
-	if image:
-		parts.append({"inlineData": {"mimeType": image["mime_type"], "data": image["data"]}})
+
+	# Gemini takes images and audio through the same inline part.
+	for kind in ("image", "audio"):
+		blob = turn.get(kind)
+		if blob:
+			parts.append({"inlineData": {"mimeType": blob["mime_type"], "data": blob["data"]}})
+
 	return {"role": "user", "parts": parts}
 
 

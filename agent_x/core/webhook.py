@@ -245,6 +245,10 @@ def ingest(settings, **event) -> dict:
 	contact = get_or_create(wa_id, event.get("push_name"), is_group)
 	record_activity(contact, "Incoming")
 
+	# A voice note becomes an ordinary turn, so everything downstream — the
+	# agent, the log, the history — treats it as if they had typed it.
+	transcribe_if_voice(settings, event)
+
 	log_name = log_incoming(settings, contact, event)
 	bump_counter(event.get("session"))
 	frappe.db.commit()
@@ -294,6 +298,24 @@ def acknowledge(settings, event: dict) -> None:
 			frappe.log_error(frappe.get_traceback(), "AgentX: could not send typing indicator")
 
 
+def transcribe_if_voice(settings, event: dict) -> None:
+	"""Replace a voice note's empty text with what was actually said."""
+	from agent_x.agent import audio
+
+	media = event.get("media") or {}
+	if not audio.is_voice(event.get("message_type"), media):
+		return
+
+	text = audio.transcribe(media, settings)
+	if text:
+		event["text"] = text
+		event["transcribed"] = True
+	elif not (event.get("text") or "").strip():
+		# Say plainly that it could not be heard, rather than replying to silence.
+		event["text"] = ""
+		event["transcription_failed"] = True
+
+
 def should_skip(contact, settings, is_group: bool) -> str | None:
 	"""Why this message gets no automated reply, or None to go ahead."""
 	if is_group and not settings.reply_to_groups:
@@ -323,6 +345,8 @@ def run_agent(settings, contact, event: dict, log_name: str | None):
 		"message_type": event.get("message_type"),
 		"media_filename": (event.get("media") or {}).get("filename"),
 		"wa_id": contact.wa_id,
+		"transcribed": event.get("transcribed"),
+		"transcription_failed": event.get("transcription_failed"),
 	}
 
 	try:
@@ -378,6 +402,7 @@ def log_incoming(settings, contact, event: dict) -> str | None:
 			"is_group": 1 if event.get("is_group") else 0,
 			"message_type": event.get("message_type") or "text",
 			"message": event.get("text"),
+			"transcribed": 1 if event.get("transcribed") else 0,
 			"media_filename": media.get("filename"),
 			"media_mimetype": media.get("mimetype"),
 			"media_size": media.get("size"),

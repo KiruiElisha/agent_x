@@ -3,6 +3,7 @@ frappe.ui.form.on("AgentX Settings", {
 		frm.trigger("render_policy_help");
 		frm.trigger("render_bridge_status");
 		frm.trigger("render_provider_help");
+		frm.trigger("render_all_warning");
 
 		frm.add_custom_button(__("Test Connection"), () => test_connection(frm));
 		frm.add_custom_button(__("Test AI"), () => test_ai(frm));
@@ -37,6 +38,29 @@ frappe.ui.form.on("AgentX Settings", {
 				),
 			});
 		}
+	},
+
+	policy_mode(frm) {
+		frm.trigger("render_all_warning");
+	},
+
+	render_all_warning(frm) {
+		const wrapper = frm.get_field("all_documents_warning")?.$wrapper;
+		if (!wrapper) return;
+
+		wrapper.empty();
+		if (frm.doc.policy_mode !== "All Documents") return;
+
+		wrapper.append(`
+			<div style="border-left:3px solid var(--red-400);padding:10px 14px;
+			            background:var(--bg-light-gray);border-radius:4px;line-height:1.6;">
+				<b>${__("This is a much larger surface.")}</b><br>
+				${__("The assistant can reach any document type the acting user can, not just the ones you list.")}
+				${__("Two things still hold it back: a fixed list of access and secret bearing doctypes it can never touch, and the permissions of the user each number acts as.")}
+				<br><br>
+				${__("Keep Approval Required on, and give the mapped users the narrowest roles that still do the job.")}
+			</div>
+		`);
 	},
 
 	render_policy_help(frm) {

@@ -17,6 +17,11 @@
   "action_count",
   "column_break_state",
   "summary",
+  "handover_section",
+  "handed_over_on",
+  "handover_expires_on",
+  "column_break_handover",
+  "handover_reason",
   "pending_section",
   "pending_action",
   "pending_expires_on"
@@ -84,6 +89,37 @@
    "fieldname": "summary",
    "fieldtype": "Small Text",
    "label": "Summary",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.status==\"Handed Over\"",
+   "fieldname": "handover_section",
+   "fieldtype": "Section Break",
+   "label": "Handover"
+  },
+  {
+   "fieldname": "handed_over_on",
+   "fieldtype": "Datetime",
+   "label": "Handed Over",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "handover_expires_on",
+   "fieldtype": "Datetime",
+   "label": "Returns to Assistant",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_handover",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "handover_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "no_copy": 1,
    "read_only": 1
   },
   {

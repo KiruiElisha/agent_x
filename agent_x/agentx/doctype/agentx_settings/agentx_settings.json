@@ -51,6 +51,10 @@
   "column_break_tuning",
   "max_tool_iterations",
   "max_reply_characters",
+  "audio_section",
+  "transcribe_voice_notes",
+  "column_break_audio",
+  "max_audio_mb",
   "vision_section",
   "ai_read_images",
   "ai_max_image_mb",
@@ -65,6 +69,8 @@
   "column_break_safety",
   "max_actions_per_conversation",
   "dry_run",
+  "alerts_section",
+  "alerts_enabled",
   "catalogue_section",
   "enable_catalogue",
   "show_stock_levels",
@@ -77,6 +83,19 @@
   "column_break_documents",
   "pdf_retention_hours",
   "send_draft_after_lines",
+  "policy_mode",
+  "all_documents_warning",
+  "all_defaults_section",
+  "all_can_read",
+  "all_can_create",
+  "all_can_write",
+  "column_break_all_defaults",
+  "all_can_submit",
+  "all_can_cancel",
+  "all_can_delete",
+  "column_break_all_approval",
+  "all_requires_approval",
+  "all_max_per_day",
   "policy_section",
   "policy_help",
   "doctype_policies",
@@ -112,6 +131,18 @@
   "column_break_retrieval",
   "chunk_size",
   "chunk_overlap",
+  "handoff_section",
+  "handoff_enabled",
+  "handoff_keywords",
+  "handoff_message",
+  "column_break_handoff",
+  "handoff_user",
+  "handoff_role",
+  "handoff_timeout_minutes",
+  "corrections_section",
+  "use_corrections",
+  "column_break_corrections",
+  "correction_limit",
   "logging_tab",
   "log_messages",
   "store_raw_payload",
@@ -386,6 +417,29 @@
    "label": "Max Reply Characters"
   },
   {
+   "fieldname": "audio_section",
+   "fieldtype": "Section Break",
+   "label": "Voice Notes"
+  },
+  {
+   "default": "1",
+   "description": "Gemini reads the audio and the assistant answers as if they had typed it. Gemini only.",
+   "fieldname": "transcribe_voice_notes",
+   "fieldtype": "Check",
+   "label": "Transcribe Voice Notes"
+  },
+  {
+   "fieldname": "column_break_audio",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "8",
+   "depends_on": "transcribe_voice_notes",
+   "fieldname": "max_audio_mb",
+   "fieldtype": "Int",
+   "label": "Max Audio Size (MB)"
+  },
+  {
    "fieldname": "vision_section",
    "fieldtype": "Section Break",
    "label": "Images"
@@ -469,6 +523,18 @@
    "label": "Dry Run"
   },
   {
+   "fieldname": "alerts_section",
+   "fieldtype": "Section Break",
+   "label": "Outbound Alerts"
+  },
+  {
+   "default": "1",
+   "description": "Lets WhatsApp Alert rules message people when documents change. Turning this off silences every alert at once.",
+   "fieldname": "alerts_enabled",
+   "fieldtype": "Check",
+   "label": "Send Outbound Alerts"
+  },
+  {
    "fieldname": "catalogue_section",
    "fieldtype": "Section Break",
    "label": "Item Catalogue"
@@ -546,9 +612,83 @@
    "label": "Send Draft PDF From (lines)"
   },
   {
+   "bold": 1,
+   "default": "Listed Documents Only",
+   "description": "Listed is the safe default. All Documents lets it reach anything the acting user can already reach, which is a much larger surface.",
+   "fieldname": "policy_mode",
+   "fieldtype": "Select",
+   "label": "What the Assistant May Reach",
+   "options": "Listed Documents Only\nAll Documents"
+  },
+  {
+   "depends_on": "eval:doc.policy_mode==\"All Documents\"",
+   "fieldname": "all_documents_warning",
+   "fieldtype": "HTML",
+   "label": "All Documents Warning"
+  },
+  {
+   "depends_on": "eval:doc.policy_mode==\"All Documents\"",
+   "fieldname": "all_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Default Permissions for Everything Else"
+  },
+  {
+   "default": "1",
+   "fieldname": "all_can_read",
+   "fieldtype": "Check",
+   "label": "Read"
+  },
+  {
+   "fieldname": "all_can_create",
+   "fieldtype": "Check",
+   "label": "Create"
+  },
+  {
+   "fieldname": "all_can_write",
+   "fieldtype": "Check",
+   "label": "Write"
+  },
+  {
+   "fieldname": "column_break_all_defaults",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "all_can_submit",
+   "fieldtype": "Check",
+   "label": "Submit"
+  },
+  {
+   "fieldname": "all_can_cancel",
+   "fieldtype": "Check",
+   "label": "Cancel"
+  },
+  {
+   "fieldname": "all_can_delete",
+   "fieldtype": "Check",
+   "label": "Delete"
+  },
+  {
+   "fieldname": "column_break_all_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Strongly recommended. Anything not listed below still asks before it writes.",
+   "fieldname": "all_requires_approval",
+   "fieldtype": "Check",
+   "label": "Approval Required"
+  },
+  {
+   "default": "0",
+   "description": "Across every unlisted doctype. 0 means no limit.",
+   "fieldname": "all_max_per_day",
+   "fieldtype": "Int",
+   "label": "Max Actions Per Day"
+  },
+  {
    "fieldname": "policy_section",
    "fieldtype": "Section Break",
-   "label": "What the Assistant May Touch"
+   "label": "Specific Documents"
   },
   {
    "fieldname": "policy_help",
@@ -746,6 +886,82 @@
    "fieldname": "chunk_overlap",
    "fieldtype": "Int",
    "label": "Chunk Overlap (characters)"
+  },
+  {
+   "fieldname": "handoff_section",
+   "fieldtype": "Section Break",
+   "label": "Handing Over to a Person"
+  },
+  {
+   "default": "1",
+   "description": "The assistant stays silent while a person has the conversation.",
+   "fieldname": "handoff_enabled",
+   "fieldtype": "Check",
+   "label": "Allow Handover"
+  },
+  {
+   "default": "human,agent,person,someone,representative,talk to someone,customer care",
+   "depends_on": "handoff_enabled",
+   "description": "Matched as whole words.",
+   "fieldname": "handoff_keywords",
+   "fieldtype": "Data",
+   "label": "Words That Ask for a Person"
+  },
+  {
+   "default": "Let me get a person to help you with this. Someone will reply shortly.",
+   "depends_on": "handoff_enabled",
+   "fieldname": "handoff_message",
+   "fieldtype": "Small Text",
+   "label": "What to Say"
+  },
+  {
+   "fieldname": "column_break_handoff",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "handoff_enabled",
+   "fieldname": "handoff_user",
+   "fieldtype": "Link",
+   "label": "Notify This User",
+   "options": "User"
+  },
+  {
+   "depends_on": "handoff_enabled",
+   "fieldname": "handoff_role",
+   "fieldtype": "Link",
+   "label": "Or Everyone With This Role",
+   "options": "Role"
+  },
+  {
+   "default": "60",
+   "depends_on": "handoff_enabled",
+   "description": "If nobody picks it up, the assistant takes it back rather than leaving the customer in silence. 0 waits forever.",
+   "fieldname": "handoff_timeout_minutes",
+   "fieldtype": "Int",
+   "label": "Return to Assistant After (minutes)"
+  },
+  {
+   "fieldname": "corrections_section",
+   "fieldtype": "Section Break",
+   "label": "Learning From Mistakes"
+  },
+  {
+   "default": "1",
+   "description": "Past mistakes are added to the prompt as do-not-repeat instructions.",
+   "fieldname": "use_corrections",
+   "fieldtype": "Check",
+   "label": "Apply Recorded Corrections"
+  },
+  {
+   "fieldname": "column_break_corrections",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "20",
+   "depends_on": "use_corrections",
+   "fieldname": "correction_limit",
+   "fieldtype": "Int",
+   "label": "Maximum Corrections Per Reply"
   },
   {
    "fieldname": "logging_tab",

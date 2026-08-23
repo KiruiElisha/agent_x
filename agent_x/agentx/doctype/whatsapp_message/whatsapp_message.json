@@ -17,6 +17,7 @@
   "is_group",
   "content_section",
   "message_type",
+  "transcribed",
   "message",
   "media_section",
   "media_file",
@@ -30,6 +31,7 @@
   "column_break_meta",
   "error",
   "agent_run",
+  "alert",
   "reference_section",
   "reference_doctype",
   "reference_name",
@@ -111,6 +113,12 @@
    "read_only": 1
   },
   {
+   "fieldname": "transcribed",
+   "fieldtype": "Check",
+   "label": "Transcribed from Audio",
+   "read_only": 1
+  },
+  {
    "fieldname": "message",
    "fieldtype": "Long Text",
    "in_list_view": 1,
@@ -186,6 +194,14 @@
    "label": "Agent Run",
    "options": "Agent Run",
    "read_only": 1
+  },
+  {
+   "fieldname": "alert",
+   "fieldtype": "Link",
+   "label": "Alert",
+   "options": "WhatsApp Alert",
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "reference_section",

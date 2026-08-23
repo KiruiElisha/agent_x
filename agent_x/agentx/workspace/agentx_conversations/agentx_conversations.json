@@ -1,13 +1,13 @@
 {
  "charts": [],
- "content": "[{\"id\": \"conversations\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Conversations</b></span>\", \"col\": 12}}, {\"id\": \"sc_messages\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Messages\", \"col\": 3}}, {\"id\": \"sc_contacts\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Contacts\", \"col\": 3}}, {\"id\": \"sc_open_conversations\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Open Conversations\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
+ "content": "[{\"id\": \"conversations\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Conversations</b></span>\", \"col\": 12}}, {\"id\": \"sc_messages\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Messages\", \"col\": 3}}, {\"id\": \"sc_contacts\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Contacts\", \"col\": 3}}, {\"id\": \"sc_open\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Open\", \"col\": 3}}, {\"id\": \"sc_handed_over\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Handed Over\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
  "creation": "2026-08-23 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
  "for_user": "",
  "hide_custom": 0,
- "icon": "message",
+ "icon": "comment",
  "idx": 0,
  "indicator_color": "green",
  "is_hidden": 0,
@@ -24,6 +24,7 @@
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "message",
    "is_query_report": 0,
    "label": "WhatsApp Message",
    "link_count": 0,
@@ -35,6 +36,7 @@
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "customer",
    "is_query_report": 0,
    "label": "WhatsApp Contact",
    "link_count": 0,
@@ -46,6 +48,7 @@
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "comment",
    "is_query_report": 0,
    "label": "Agent Conversation",
    "link_count": 0,
@@ -55,7 +58,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-08-23 00:00:00.000000",
+ "modified": "2026-08-24 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Conversations",
@@ -70,6 +73,7 @@
   {
    "color": "Grey",
    "doc_view": "",
+   "icon": "message",
    "label": "Messages",
    "link_to": "WhatsApp Message",
    "type": "DocType"
@@ -77,6 +81,7 @@
   {
    "color": "Blue",
    "doc_view": "",
+   "icon": "customer",
    "label": "Contacts",
    "link_to": "WhatsApp Contact",
    "type": "DocType"
@@ -84,9 +89,19 @@
   {
    "color": "Green",
    "doc_view": "",
-   "label": "Open Conversations",
+   "icon": "comment",
+   "label": "Open",
    "link_to": "Agent Conversation",
    "stats_filter": "{\"status\": \"Active\"}",
+   "type": "DocType"
+  },
+  {
+   "color": "Yellow",
+   "doc_view": "",
+   "icon": "solid-warning",
+   "label": "Handed Over",
+   "link_to": "Agent Conversation",
+   "stats_filter": "{\"status\": \"Handed Over\"}",
    "type": "DocType"
   }
  ],

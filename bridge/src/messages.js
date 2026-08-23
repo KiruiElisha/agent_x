@@ -97,6 +97,13 @@ export function messageType(message) {
 	return "text";
 }
 
+const VOICE_KINDS = new Set(["audio", "voice", "ptt"]);
+
+/** Whether this message is something the assistant should try to transcribe. */
+export function isVoice(event) {
+	return VOICE_KINDS.has(event?.media?.type) || VOICE_KINDS.has(event?.message_type);
+}
+
 /** Digits-only sender id, e.g. "254712345678" from "254712345678@s.whatsapp.net". */
 export function jidToNumber(jid) {
 	if (!jid) return null;

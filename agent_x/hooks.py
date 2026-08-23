@@ -18,10 +18,29 @@ add_to_apps_screen = [
 # ------------
 after_install = "agent_x.install.after_install"
 
+# Document Events
+# ---------------
+# Alerts hang off ordinary document events. The dispatcher checks one cached
+# set and returns for any doctype without an alert, so the cost on an unrelated
+# save is a single Redis read.
+
+doc_events = {
+	"*": {
+		"after_insert": "agent_x.core.alerts.handle",
+		"on_submit": "agent_x.core.alerts.handle",
+		"on_cancel": "agent_x.core.alerts.handle",
+		"on_update": "agent_x.core.alerts.handle",
+	}
+}
+
 # Scheduled Tasks
 # ---------------
 scheduler_events = {
 	"hourly": [
+		# Date based reminders, and anything held back for business hours.
+		"agent_x.core.alerts.run_scheduled",
+		# Give a conversation back if nobody picked it up.
+		"agent_x.agent.handoff.release_expired",
 		# Confirmations nobody answered must not sit pending forever.
 		"agent_x.agentx.doctype.agent_action.agent_action.expire_pending",
 		# Generated PDFs are public while a hosted provider fetches them.

@@ -14,6 +14,18 @@ from agent_x.agent import policy
 from agent_x.agent.tools import catalogue, documents
 
 # Operation each tool needs, used to decide whether to advertise it at all.
+def handover_tool(ctx, reason: str | None = None) -> dict:
+	"""Acknowledge the handover the runtime already performed.
+
+	The runtime does the actual handing over, because it owns the conversation.
+	This exists so the model gets a normal tool result back and stops trying.
+	"""
+	return {
+		"handed_over": True,
+		"note": _("A person has been notified. Tell the customer briefly and stop."),
+	}
+
+
 TOOL_OPERATIONS = {
 	"list_documents": "read",
 	"get_document": "read",
@@ -28,6 +40,8 @@ TOOL_OPERATIONS = {
 	"find_items": "read",
 	"get_item": "read",
 	"list_item_groups": "read",
+	"find_doctypes": "read",
+	"hand_over": None,
 }
 
 HANDLERS = {
@@ -44,11 +58,27 @@ HANDLERS = {
 	"find_items": catalogue.find_items,
 	"get_item": catalogue.get_item,
 	"list_item_groups": catalogue.list_item_groups,
+	"find_doctypes": documents.find_doctypes,
+	"hand_over": handover_tool,
 }
 
 
-def doctype_property(doctypes: list[str]) -> dict:
-	"""Constrain the doctype argument to what is actually permitted."""
+def doctype_property(doctypes: list[str], open_ended: bool = False) -> dict:
+	"""Constrain the doctype argument to what is actually permitted.
+
+	An enum is the strongest guard available, since the model cannot name what
+	it was never shown. All Documents mode has no list to enumerate, so the
+	argument opens up and the policy gate does the refusing instead.
+	"""
+	if open_ended:
+		return {
+			"type": "string",
+			"description": (
+				"The exact document type name, e.g. 'Sales Order'. "
+				"Use find_doctypes first if you are not sure it exists."
+			),
+		}
+
 	return {
 		"type": "string",
 		"description": "The document type to work with.",
@@ -61,12 +91,14 @@ def build_schemas(settings) -> list[dict]:
 	if not settings.automation_enabled:
 		return []
 
+	open_ended = (settings.policy_mode or "Listed Documents Only") == "All Documents"
 	permitted = permitted_operations(settings)
+
 	readable = sorted(permitted.get("read", set()))
-	if not readable:
+	if not (readable or open_ended):
 		return []
 
-	dt = doctype_property(readable)
+	dt = doctype_property(readable, open_ended)
 	schemas: list[dict] = [
 		{
 			"name": "list_documents",
@@ -142,6 +174,29 @@ def build_schemas(settings) -> list[dict]:
 	if catalogue_enabled(settings, permitted):
 		schemas.extend(catalogue_schemas())
 
+	if settings.handoff_enabled:
+		schemas.append(
+			{
+				"name": "hand_over",
+				"description": (
+					"Hand this conversation to a person. Use it when the customer is upset, "
+					"wants a refund or to complain, asks for a human, or needs something you "
+					"have no tool for. After calling it, say briefly that someone will reply "
+					"and stop."
+				),
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"reason": {
+							"type": "string",
+							"description": "One line telling the person taking over what is needed.",
+						}
+					},
+					"required": ["reason"],
+				},
+			}
+		)
+
 	if settings.allow_document_pdfs:
 		schemas.append(
 			{
@@ -167,7 +222,26 @@ def build_schemas(settings) -> list[dict]:
 			}
 		)
 
-	if permitted.get("create"):
+	if open_ended:
+		schemas.append(
+			{
+				"name": "find_doctypes",
+				"description": (
+					"Look up document types by name. You are not given a fixed list, so use "
+					"this to find the exact name before reading or changing anything."
+				),
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"query": {"type": "string", "description": "Part of the name, e.g. 'invoice'."},
+						"limit": {"type": "integer", "description": "How many, at most 25."},
+					},
+					"required": ["query"],
+				},
+			}
+		)
+
+	if permitted.get("create") or (open_ended and settings.all_can_create):
 		schemas.append(
 			{
 				"name": "create_document",
@@ -178,7 +252,7 @@ def build_schemas(settings) -> list[dict]:
 				"parameters": {
 					"type": "object",
 					"properties": {
-						"doctype": doctype_property(sorted(permitted["create"])),
+						"doctype": doctype_property(sorted(permitted.get("create", [])), open_ended),
 						"values": {
 							"type": "string",
 							"description": (
@@ -196,7 +270,7 @@ def build_schemas(settings) -> list[dict]:
 			}
 		)
 
-	if permitted.get("update"):
+	if permitted.get("update") or (open_ended and settings.all_can_write):
 		schemas.append(
 			{
 				"name": "update_document",
@@ -204,7 +278,7 @@ def build_schemas(settings) -> list[dict]:
 				"parameters": {
 					"type": "object",
 					"properties": {
-						"doctype": doctype_property(sorted(permitted["update"])),
+						"doctype": doctype_property(sorted(permitted.get("update", [])), open_ended),
 						"name": {"type": "string", "description": "The document's exact name."},
 						"values": {
 							"type": "string",
@@ -222,7 +296,8 @@ def build_schemas(settings) -> list[dict]:
 		("cancel", "cancel_document", "Cancel a submitted document."),
 		("delete", "delete_document", "Delete a document permanently. Prefer cancelling instead."),
 	):
-		if not permitted.get(operation):
+		enabled_by_default = open_ended and getattr(settings, f"all_can_{operation}", 0)
+		if not (permitted.get(operation) or enabled_by_default):
 			continue
 
 		schemas.append(
@@ -232,7 +307,7 @@ def build_schemas(settings) -> list[dict]:
 				"parameters": {
 					"type": "object",
 					"properties": {
-						"doctype": doctype_property(sorted(permitted[operation])),
+						"doctype": doctype_property(sorted(permitted.get(operation, [])), open_ended),
 						"name": {"type": "string", "description": "The document's exact name."},
 						"summary": {"type": "string", "description": "One line describing what this does."},
 					},
@@ -363,6 +438,15 @@ def call(name: str, arguments: dict, ctx) -> dict:
 	handler = HANDLERS.get(name)
 	if not handler:
 		return {"error": _("There is no tool called {0}.").format(name)}
+
+	# Some tools act on the conversation rather than a document, so there is no
+	# doctype to check a policy against.
+	if TOOL_OPERATIONS.get(name) is None and name in HANDLERS:
+		try:
+			return handler(ctx, **(arguments or {}))
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"AgentX tool failed: {name}")
+			return {"error": _("{0} failed.").format(name)}
 
 	try:
 		arguments = decode_json_arguments(arguments or {})

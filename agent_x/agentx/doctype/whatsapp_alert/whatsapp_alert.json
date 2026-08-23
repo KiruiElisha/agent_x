@@ -1,0 +1,271 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:title",
+ "creation": "2026-08-23 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "enabled",
+  "column_break_head",
+  "document_type",
+  "event",
+  "value_change_section",
+  "value_change_field",
+  "schedule_section",
+  "date_field",
+  "column_break_schedule",
+  "days",
+  "condition_section",
+  "condition",
+  "condition_help",
+  "recipient_section",
+  "recipient_type",
+  "recipient_field",
+  "fixed_number",
+  "column_break_recipient",
+  "session",
+  "respect_business_hours",
+  "message_section",
+  "message",
+  "attachment_section",
+  "attach_document",
+  "print_format",
+  "stats_section",
+  "sent_count",
+  "last_sent_on",
+  "column_break_stats",
+  "error_count",
+  "last_error"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "document_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Document Type",
+   "options": "DocType",
+   "reqd": 1
+  },
+  {
+   "default": "On Submit",
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "When",
+   "options": "After Insert\nOn Submit\nOn Cancel\nOn Update\nOn Value Change\nDays Before\nDays After",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.event==\"On Value Change\"",
+   "fieldname": "value_change_section",
+   "fieldtype": "Section Break",
+   "label": "Watch a Field"
+  },
+  {
+   "description": "Fires only when this field's value changes.",
+   "fieldname": "value_change_field",
+   "fieldtype": "Data",
+   "label": "Field to Watch"
+  },
+  {
+   "depends_on": "eval:[\"Days Before\",\"Days After\"].includes(doc.event)",
+   "fieldname": "schedule_section",
+   "fieldtype": "Section Break",
+   "label": "Schedule"
+  },
+  {
+   "description": "A Date or Datetime field on the document, e.g. due_date.",
+   "fieldname": "date_field",
+   "fieldtype": "Data",
+   "label": "Date Field"
+  },
+  {
+   "fieldname": "column_break_schedule",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "How many days before or after that date to send.",
+   "fieldname": "days",
+   "fieldtype": "Int",
+   "label": "Days"
+  },
+  {
+   "fieldname": "condition_section",
+   "fieldtype": "Section Break",
+   "label": "Only When"
+  },
+  {
+   "description": "A Python expression using doc, e.g. doc.grand_total > 10000. Leave empty to always send.",
+   "fieldname": "condition",
+   "fieldtype": "Small Text",
+   "label": "Condition"
+  },
+  {
+   "fieldname": "condition_help",
+   "fieldtype": "HTML",
+   "label": "Condition Help"
+  },
+  {
+   "fieldname": "recipient_section",
+   "fieldtype": "Section Break",
+   "label": "Send To"
+  },
+  {
+   "default": "Field on Document",
+   "fieldname": "recipient_type",
+   "fieldtype": "Select",
+   "label": "Recipient",
+   "options": "Field on Document\nLinked Contact\nFixed Number",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.recipient_type==\"Field on Document\"",
+   "description": "Field holding the phone number, e.g. contact_mobile. A dotted path like customer.mobile_no also works.",
+   "fieldname": "recipient_field",
+   "fieldtype": "Data",
+   "label": "Number Field"
+  },
+  {
+   "depends_on": "eval:doc.recipient_type==\"Fixed Number\"",
+   "description": "With country code, e.g. 254712345678.",
+   "fieldname": "fixed_number",
+   "fieldtype": "Data",
+   "label": "Number"
+  },
+  {
+   "fieldname": "column_break_recipient",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Empty uses the default session.",
+   "fieldname": "session",
+   "fieldtype": "Link",
+   "label": "Send From",
+   "options": "WhatsApp Session"
+  },
+  {
+   "default": "1",
+   "fieldname": "respect_business_hours",
+   "fieldtype": "Check",
+   "label": "Hold Until Business Hours"
+  },
+  {
+   "fieldname": "message_section",
+   "fieldtype": "Section Break",
+   "label": "Message"
+  },
+  {
+   "description": "Jinja template. Use {{ doc.field }}, e.g. Hi {{ doc.customer_name }}, order {{ doc.name }} is confirmed.",
+   "fieldname": "message",
+   "fieldtype": "Text",
+   "label": "Message",
+   "reqd": 1
+  },
+  {
+   "fieldname": "attachment_section",
+   "fieldtype": "Section Break",
+   "label": "Attachment"
+  },
+  {
+   "fieldname": "attach_document",
+   "fieldtype": "Check",
+   "label": "Attach the Document as a PDF"
+  },
+  {
+   "depends_on": "attach_document",
+   "fieldname": "print_format",
+   "fieldtype": "Link",
+   "label": "Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "stats_section",
+   "fieldtype": "Section Break",
+   "label": "Activity"
+  },
+  {
+   "fieldname": "sent_count",
+   "fieldtype": "Int",
+   "label": "Sent",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_sent_on",
+   "fieldtype": "Datetime",
+   "label": "Last Sent",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_stats",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "error_count",
+   "fieldtype": "Int",
+   "label": "Failures",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "WhatsApp Alert",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

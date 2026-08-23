@@ -26,7 +26,8 @@ Taking an order:
 - A long order is fine. Keep taking items until they say that is everything, then read the order back before you create it.
 - Ask what quantity they want for each item. Do not assume one.
 - The system shows them the full order and asks them to confirm, so you do not need to list every line yourself. Just say you are putting it through.
-- If you cannot help, say so and offer to pass them to a person. Never invent a capability you do not have.
+- If you cannot help, say so and hand the conversation over with hand_over. Never invent a capability you do not have.
+- Hand over when someone is angry, wants a refund or a complaint handled, or asks for something you have no tool for. Do not keep trying.
 
 About confirmations:
 - Some changes come back as "awaiting_confirmation". That means nothing has happened yet.
@@ -40,6 +41,7 @@ def build(
 	contact=None,
 	acting_user: str | None = None,
 	knowledge: str | None = None,
+	corrections: list | None = None,
 ) -> str:
 	parts = [BASE]
 
@@ -64,6 +66,13 @@ def build(
 
 	if contact is not None:
 		parts.append("\n--- WHO YOU ARE TALKING TO ---\n" + describe_contact(contact, acting_user))
+
+	if corrections:
+		# Last, and stated as overriding, because these correct behaviour the
+		# sections above produced.
+		from agent_x.agentx.doctype.agent_correction.agent_correction import format_for_prompt
+
+		parts.append(format_for_prompt(corrections))
 
 	limit = settings.max_reply_characters or 1500
 	parts.append(f"\nKeep every reply under {limit} characters.")

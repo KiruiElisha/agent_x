@@ -105,6 +105,65 @@ Also: per-doctype daily caps, a per-conversation action limit, an optional field
 allowlist, and a **Dry Run** switch that plans and logs everything without
 writing.
 
+## Alerts: messages the system starts
+
+Everything above is the assistant answering. **WhatsApp Alert** is the other
+direction — the system messaging someone because a document changed.
+
+Create an alert with a document type, an event (*After Insert*, *On Submit*,
+*On Cancel*, *On Update*, *On Value Change*, *Days Before*, *Days After*), an
+optional condition, and a Jinja message:
+
+```
+Hi {{ doc.customer_name }}, order {{ doc.name }} is confirmed.
+Total {{ doc.grand_total }}. We will let you know when it ships.
+```
+
+The recipient comes from a field on the document (`contact_mobile`, or a dotted
+path like `customer.mobile_no`), from the linked WhatsApp Contact, or a fixed
+number. Tick **Attach the Document as a PDF** to send the print format with it.
+
+*Days Before* and *Days After* count from a date field, which is how payment
+reminders and delivery follow-ups work. Those run hourly and hold until business
+hours, because none of it is urgent enough to wake anyone up.
+
+**Preview** renders an alert against a real document — showing the message, the
+resolved number, and whether the condition passes — without sending anything.
+
+Two things keep this safe to run site-wide. The dispatcher hangs off `doc_events`
+for every doctype, so it checks one cached set and returns: about 4µs on a save
+with no alert, and 1.6ms once per worker to warm up. And sending happens in a
+background job, so a WhatsApp call never sits inside somebody's save, and a
+failed alert can never roll back the document that triggered it.
+
+Every alert message is deduplicated against the document it came from, so a
+retry or a repeated scheduler pass cannot message the same person twice.
+
+## Letting the assistant reach everything
+
+**What the Assistant May Reach** has two modes.
+
+*Listed Documents Only* is the default: the assistant sees only the document
+types in the policy table, and the tool schemas pin the doctype argument to an
+enum, so it cannot name anything else.
+
+*All Documents* opens it to any document type the acting user can already reach.
+The enum drops and a `find_doctypes` tool appears so the model can look names up.
+The default operations for unlisted doctypes are set separately, and explicit
+rows still override them.
+
+Two things still hold in that mode, and they are the whole safety story:
+
+- A fixed list of doctypes is never reachable — `User`, `Role`, `Server Script`,
+  `AgentX Settings`, permission records — along with any doctype carrying a
+  password field, every child table, and every Single.
+- Every action still runs as the mapped Frappe user, so nobody gains anything
+  over WhatsApp they lack in the desk.
+
+Keep **Approval Required** on in this mode, and give the mapped users narrow
+roles. The mode widens what the assistant may *attempt*; it is the user's
+permissions that decide what actually happens.
+
 ## The audit trail
 
 Every turn writes an **Agent Run**: the incoming message, the reply, each tool
@@ -146,6 +205,10 @@ Manners**.
 Anything a provider cannot do returns `{"supported": false}` rather than
 raising, so the same call is safe against either provider.
 
+Once a created document reaches a few lines, the assistant sends it back as a
+PDF automatically — a twenty line order is not really checkable as a chat
+message. The threshold is configurable and 0 turns it off.
+
 ## Sending from your own code
 
 ```python
@@ -167,6 +230,30 @@ send_message(
 
 WaClient can only send media from a public URL; the bridge also accepts raw
 bytes.
+
+## Knowledge base
+
+Business context that never changes — policies, delivery terms, FAQs — costs
+tokens on every message when it sits in the system prompt. **Agent Knowledge**
+holds that material instead: it is chunked, embedded by a background job, and
+each message retrieves only the few passages that relate to it.
+
+Sources can be typed text, a Frappe document, or an attached text file. A
+**Test a Question** button shows exactly what a customer question would retrieve
+and at what score.
+
+This is a trade, not a free win. Retrieval adds one small embedding call per
+message, so it pays for itself once the material is longer than about a page and
+costs slightly more when it is not. That is why it is off by default — and why
+it only saves anything if you move the bulk of your material out of **Business
+Context** and into Agent Knowledge. Left where it is, it still goes into every
+prompt.
+
+Chunking splits on paragraphs rather than a fixed window, because a rule cut
+mid-sentence retrieves badly. Vectors are stored as base64 float32, about 74%
+smaller than JSON, and searched in process with numpy against a cached matrix.
+Greetings and one-word replies skip retrieval entirely, or every "thanks" would
+cost an embedding call.
 
 ## Tests
 

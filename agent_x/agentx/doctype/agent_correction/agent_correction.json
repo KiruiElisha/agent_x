@@ -1,0 +1,139 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-23 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "applies_when",
+  "enabled",
+  "column_break_head",
+  "document_type",
+  "priority",
+  "behaviour_section",
+  "wrong_reply",
+  "correct_behaviour",
+  "origin_section",
+  "agent_run",
+  "contact",
+  "column_break_origin",
+  "times_applied",
+  "last_applied_on"
+ ],
+ "fields": [
+  {
+   "description": "The situation this covers, e.g. 'someone asks about refunds on sale items'.",
+   "fieldname": "applies_when",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Applies When",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional. Restricts this correction to conversations about one document type.",
+   "fieldname": "document_type",
+   "fieldtype": "Link",
+   "label": "Only For",
+   "options": "DocType"
+  },
+  {
+   "default": "0",
+   "description": "Higher is applied first when there are more than the limit.",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority"
+  },
+  {
+   "fieldname": "behaviour_section",
+   "fieldtype": "Section Break",
+   "label": "What Went Wrong"
+  },
+  {
+   "fieldname": "wrong_reply",
+   "fieldtype": "Small Text",
+   "label": "What It Wrongly Said"
+  },
+  {
+   "fieldname": "correct_behaviour",
+   "fieldtype": "Small Text",
+   "label": "What It Should Do Instead",
+   "reqd": 1
+  },
+  {
+   "fieldname": "origin_section",
+   "fieldtype": "Section Break",
+   "label": "Origin"
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "label": "From Agent Run",
+   "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contact",
+   "fieldtype": "Link",
+   "label": "Contact",
+   "options": "WhatsApp Contact",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_origin",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "times_applied",
+   "fieldtype": "Int",
+   "label": "Times Applied",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_applied_on",
+   "fieldtype": "Datetime",
+   "label": "Last Applied",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "Agent Correction",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "applies_when",
+ "track_changes": 1
+}

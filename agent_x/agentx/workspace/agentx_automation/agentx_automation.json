@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"what_the_assistant_did\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>What the Assistant Did</b></span>\", \"col\": 12}}, {\"id\": \"sc_needs_approval\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Needs Approval\", \"col\": 3}}, {\"id\": \"sc_executed\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Executed\", \"col\": 3}}, {\"id\": \"sc_agent_runs\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Agent Runs\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
+ "content": "[{\"id\": \"outbound\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Outbound</b></span>\", \"col\": 12}}, {\"id\": \"sc_alerts\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Alerts\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"what_the_assistant_did\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>What the Assistant Did</b></span>\", \"col\": 12}}, {\"id\": \"sc_needs_approval\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Needs Approval\", \"col\": 3}}, {\"id\": \"sc_executed\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Executed\", \"col\": 3}}, {\"id\": \"sc_agent_runs\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Agent Runs\", \"col\": 3}}, {\"id\": \"sc_corrections\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Corrections\", \"col\": 3}}, {\"id\": \"sp2\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
  "creation": "2026-08-23 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -17,13 +17,26 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "All Documents",
-   "link_count": 2,
+   "link_count": 4,
    "onboard": 0,
    "type": "Card Break"
   },
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "notification",
+   "is_query_report": 0,
+   "label": "WhatsApp Alert",
+   "link_count": 0,
+   "link_to": "WhatsApp Alert",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "permission",
    "is_query_report": 0,
    "label": "Agent Action",
    "link_count": 0,
@@ -35,6 +48,7 @@
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "list-alt",
    "is_query_report": 0,
    "label": "Agent Run",
    "link_count": 0,
@@ -42,9 +56,21 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "edit",
+   "is_query_report": 0,
+   "label": "Agent Correction",
+   "link_count": 0,
+   "link_to": "Agent Correction",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-08-23 00:00:00.000000",
+ "modified": "2026-08-24 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Automation",
@@ -57,8 +83,17 @@
  "sequence_id": 3.0,
  "shortcuts": [
   {
+   "color": "Cyan",
+   "doc_view": "",
+   "icon": "notification",
+   "label": "Alerts",
+   "link_to": "WhatsApp Alert",
+   "type": "DocType"
+  },
+  {
    "color": "Orange",
    "doc_view": "",
+   "icon": "permission",
    "label": "Needs Approval",
    "link_to": "Agent Action",
    "stats_filter": "{\"status\": \"Pending\"}",
@@ -67,6 +102,7 @@
   {
    "color": "Green",
    "doc_view": "",
+   "icon": "tick",
    "label": "Executed",
    "link_to": "Agent Action",
    "stats_filter": "{\"status\": \"Executed\"}",
@@ -75,8 +111,17 @@
   {
    "color": "Grey",
    "doc_view": "",
+   "icon": "list-alt",
    "label": "Agent Runs",
    "link_to": "Agent Run",
+   "type": "DocType"
+  },
+  {
+   "color": "Purple",
+   "doc_view": "",
+   "icon": "edit",
+   "label": "Corrections",
+   "link_to": "Agent Correction",
    "type": "DocType"
   }
  ],

@@ -239,6 +239,51 @@ def describe_doctype(ctx: ToolContext, doctype: str) -> dict:
 	}
 
 
+def find_doctypes(ctx: ToolContext, query: str, limit: int = 10) -> dict:
+	"""Look up document types by name.
+
+	Only reachable in All Documents mode, where the model is not given a fixed
+	list and would otherwise have to guess at names.
+	"""
+	from agent_x.agent import policy
+
+	if (ctx.settings.policy_mode or "Listed Documents Only") != "All Documents":
+		return {"error": _("Ask about the document types you were told about.")}
+
+	term = (query or "").strip()
+	if not term:
+		frappe.throw(_("Say what kind of document you are looking for."))
+
+	rows = frappe.get_all(
+		"DocType",
+		filters={"name": ("like", f"%{term}%"), "issingle": 0, "istable": 0},
+		fields=["name", "module", "is_submittable"],
+		limit=max(1, min(int(limit or 10), 25)),
+		order_by="name asc",
+	)
+
+	found = []
+	for row in rows:
+		if not policy.is_automatable(row.name):
+			continue
+
+		# Only offer what this user could actually read.
+		if not policy.has_permission_as(ctx.acting_user, row.name, "read", None):
+			continue
+
+		found.append(
+			{"doctype": row.name, "module": row.module, "submittable": bool(row.is_submittable)}
+		)
+
+	return {
+		"count": len(found),
+		"doctypes": found,
+		"note": _("Use describe_doctype on one of these to see its fields.")
+		if found
+		else _("Nothing matched that you are allowed to see."),
+	}
+
+
 # ---------------------------------------------------------------------- writing
 
 

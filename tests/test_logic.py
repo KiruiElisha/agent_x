@@ -193,12 +193,23 @@ class FakeSettings:
 		confirm_before_write=0,
 		allow_document_pdfs=0,
 		enable_catalogue=0,
+		policy_mode="Listed Documents Only",
+		**defaults,
 	):
 		self.doctype_policies = policies
 		self.automation_enabled = automation_enabled
 		self.confirm_before_write = confirm_before_write
 		self.allow_document_pdfs = allow_document_pdfs
 		self.enable_catalogue = enable_catalogue
+		self.policy_mode = policy_mode
+
+		for field in ("read", "create", "write", "submit", "cancel", "delete"):
+			setattr(self, f"all_can_{field}", defaults.get(f"all_can_{field}", 0))
+		self.all_requires_approval = defaults.get("all_requires_approval", 1)
+		self.all_max_per_day = defaults.get("all_max_per_day", 0)
+		self.handoff_enabled = defaults.get("handoff_enabled", 0)
+		self.use_corrections = defaults.get("use_corrections", 0)
+		self.correction_limit = defaults.get("correction_limit", 20)
 
 	def policy_for(self, doctype):
 		return next((r for r in self.doctype_policies if r.document_type == doctype), None)
@@ -932,6 +943,307 @@ class TestTokenEstimate(unittest.TestCase):
 
 	def test_empty_text_still_counts_as_something(self):
 		self.assertEqual(kb.estimate_tokens(""), 1)
+
+
+class TestAllDocumentsMode(unittest.TestCase):
+	"""Opening everything up must still be bounded by the forbidden list and by permissions."""
+
+	def setUp(self):
+		self._perm = policy.has_permission_as
+		self._limit = policy.daily_limit_reached
+		self._auto = policy.is_automatable
+		policy.has_permission_as = lambda user, dt, perm, name: True
+		policy.daily_limit_reached = lambda p, dt: ""
+		policy.is_automatable = lambda dt: dt not in policy.FORBIDDEN_DOCTYPES
+
+	def tearDown(self):
+		policy.has_permission_as = self._perm
+		policy.daily_limit_reached = self._limit
+		policy.is_automatable = self._auto
+
+	def open_settings(self, **kw):
+		kw.setdefault("all_can_read", 1)
+		return FakeSettings([], policy_mode="All Documents", **kw)
+
+	def test_an_unlisted_doctype_becomes_readable(self):
+		self.assertTrue(policy.check(self.open_settings(), "Purchase Order", "read", "u@x.com"))
+
+	def test_listed_mode_still_refuses_the_unlisted(self):
+		listed = FakeSettings([Row(document_type="Lead", can_read=1)])
+		self.assertFalse(policy.check(listed, "Purchase Order", "read", "u@x.com"))
+
+	def test_writing_follows_the_defaults(self):
+		self.assertFalse(policy.check(self.open_settings(), "Purchase Order", "create", "u@x.com"))
+		allowed = self.open_settings(all_can_create=1)
+		self.assertTrue(policy.check(allowed, "Purchase Order", "create", "u@x.com"))
+
+	def test_forbidden_doctypes_stay_forbidden(self):
+		# This is the whole safety story for the open mode.
+		settings = self.open_settings(all_can_read=1, all_can_write=1, all_can_delete=1)
+		for doctype in ("User", "Role", "Server Script", "AgentX Settings", "Custom DocPerm"):
+			self.assertFalse(policy.check(settings, doctype, "read", "u@x.com"), doctype)
+			self.assertFalse(policy.check(settings, doctype, "delete", "u@x.com"), doctype)
+
+	def test_frappe_permissions_still_decide(self):
+		policy.has_permission_as = lambda user, dt, perm, name: False
+		self.assertFalse(policy.check(self.open_settings(), "Purchase Order", "read", "u@x.com"))
+
+	def test_an_explicit_row_overrides_the_defaults(self):
+		settings = FakeSettings(
+			[Row(document_type="Lead", can_read=1, can_create=1, requires_approval=0, max_per_day=0)],
+			policy_mode="All Documents",
+			all_can_read=1,
+		)
+		# The row grants create on Lead even though the default does not.
+		self.assertTrue(policy.check(settings, "Lead", "create", "u@x.com"))
+		self.assertFalse(policy.check(settings, "Purchase Order", "create", "u@x.com"))
+
+	def test_writes_default_to_needing_approval(self):
+		settings = self.open_settings(all_can_create=1, all_requires_approval=1)
+		self.assertTrue(policy.check(settings, "Purchase Order", "create", "u@x.com").needs_approval)
+
+	def test_an_unmapped_number_gains_nothing_from_open_mode(self):
+		self.assertFalse(policy.check(self.open_settings(), "Purchase Order", "read", None))
+
+
+class TestOpenEndedSchemas(unittest.TestCase):
+	def test_listed_mode_pins_the_doctype_to_an_enum(self):
+		settings = FakeSettings([Row(document_type="Lead", can_read=1)])
+		schemas = {t["name"]: t for t in registry.build_schemas(settings)}
+		self.assertEqual(schemas["list_documents"]["parameters"]["properties"]["doctype"]["enum"], ["Lead"])
+
+	def test_open_mode_drops_the_enum_and_offers_discovery(self):
+		settings = FakeSettings([], policy_mode="All Documents", all_can_read=1)
+		schemas = {t["name"]: t for t in registry.build_schemas(settings)}
+		self.assertNotIn("enum", schemas["list_documents"]["parameters"]["properties"]["doctype"])
+		self.assertIn("find_doctypes", schemas)
+
+	def test_discovery_is_not_offered_in_listed_mode(self):
+		settings = FakeSettings([Row(document_type="Lead", can_read=1)])
+		names = {t["name"] for t in registry.build_schemas(settings)}
+		self.assertNotIn("find_doctypes", names)
+
+	def test_open_mode_advertises_writes_from_the_defaults(self):
+		settings = FakeSettings([], policy_mode="All Documents", all_can_read=1, all_can_create=1)
+		names = {t["name"] for t in registry.build_schemas(settings)}
+		self.assertIn("create_document", names)
+		self.assertNotIn("delete_document", names)
+
+
+# --------------------------------------------------------------------------
+# Outbound alerts. The system starting a conversation is a different risk from
+# answering one, so the guards here matter as much as the delivery.
+# --------------------------------------------------------------------------
+
+import datetime  # noqa: E402
+
+from agent_x.core import alerts  # noqa: E402
+
+
+class TestReminderDates(unittest.TestCase):
+	"""Off-by-a-sign here means reminders fire on entirely the wrong day."""
+
+	def setUp(self):
+		self.today = datetime.date(2026, 8, 23)
+
+	def test_days_before_looks_into_the_future(self):
+		# A 3-day warning fires when the due date is 3 days away.
+		self.assertEqual(
+			alerts.target_date("Days Before", 3, self.today), datetime.date(2026, 8, 26)
+		)
+
+	def test_days_after_looks_into_the_past(self):
+		# A 2-day follow-up fires when delivery was 2 days ago.
+		self.assertEqual(
+			alerts.target_date("Days After", 2, self.today), datetime.date(2026, 8, 21)
+		)
+
+	def test_zero_days_means_today(self):
+		for event in ("Days Before", "Days After"):
+			self.assertEqual(alerts.target_date(event, 0, self.today), self.today, event)
+
+	def test_a_negative_setting_is_read_as_its_magnitude(self):
+		# Someone typing -3 into "Days Before" means three days, not minus three.
+		self.assertEqual(
+			alerts.target_date("Days Before", -3, self.today), datetime.date(2026, 8, 26)
+		)
+
+	def test_missing_days_does_not_crash(self):
+		self.assertEqual(alerts.target_date("Days Before", None, self.today), self.today)
+
+
+class TestAlertConditions(unittest.TestCase):
+	def test_an_empty_condition_always_passes(self):
+		alert = Row(condition="", name="A")
+		self.assertTrue(alerts.passes_condition(alert, Row(grand_total=100)))
+
+	def test_whitespace_is_not_a_condition(self):
+		alert = Row(condition="   ", name="A")
+		self.assertTrue(alerts.passes_condition(alert, Row(grand_total=100)))
+
+
+class TestAlertDispatchGuards(unittest.TestCase):
+	def test_only_real_document_events_are_handled(self):
+		# validate/before_save must not fire alerts, or a rejected save still messages someone.
+		self.assertEqual(set(alerts.DOC_EVENTS), {"after_insert", "on_submit", "on_cancel", "on_update"})
+
+	def test_scheduled_events_are_the_date_based_ones(self):
+		self.assertEqual(set(alerts.SCHEDULED_EVENTS), {"Days Before", "Days After"})
+
+	def test_our_own_doctypes_never_trigger_alerts(self):
+		# Otherwise logging an outgoing message could trigger another message.
+		for doctype in ("WhatsApp Message", "Agent Run", "AgentX Settings", "Agent Action"):
+			self.assertTrue(
+				doctype.startswith(("WhatsApp ", "Agent ", "AgentX ")), doctype
+			)
+
+
+# --------------------------------------------------------------------------
+# Handing over to a person. The keyword match decides whether a customer gets
+# a human, so a false positive silences the assistant for no reason.
+# --------------------------------------------------------------------------
+
+from agent_x.agent import handoff  # noqa: E402
+
+
+class HandoffSettings:
+	def __init__(self, enabled=1, words=None):
+		self.handoff_enabled = enabled
+		self.handoff_keywords = words or handoff.DEFAULT_KEYWORDS
+
+
+class TestHandoffDetection(unittest.TestCase):
+	def setUp(self):
+		self.settings = HandoffSettings()
+
+	def test_a_direct_request_is_caught(self):
+		for text in ("can I talk to a human", "I want an agent", "let me speak to a person"):
+			self.assertTrue(handoff.asked_for_a_person(text, self.settings), text)
+
+	def test_whole_words_only(self):
+		# "personalised" must not read as a request for a person, and an
+		# "agentic" mention must not escalate.
+		for text in ("do you sell personalised mugs", "is this agentic software"):
+			self.assertFalse(handoff.asked_for_a_person(text, self.settings), text)
+
+	def test_a_long_message_is_a_question_not_an_escalation(self):
+		long_text = "I was wondering about a person " + ("detail " * 40)
+		self.assertFalse(handoff.asked_for_a_person(long_text, self.settings))
+
+	def test_nothing_fires_when_handover_is_off(self):
+		self.assertFalse(handoff.asked_for_a_person("get me a human", HandoffSettings(enabled=0)))
+
+	def test_empty_input_is_not_a_request(self):
+		self.assertFalse(handoff.asked_for_a_person("", self.settings))
+		self.assertFalse(handoff.asked_for_a_person(None, self.settings))
+
+	def test_keywords_are_configurable(self):
+		settings = HandoffSettings(words="msaada,operator")
+		self.assertTrue(handoff.asked_for_a_person("naomba msaada", settings))
+		self.assertFalse(handoff.asked_for_a_person("I want a human", settings))
+
+
+class TestHandoverTool(unittest.TestCase):
+	def test_the_tool_is_offered_only_when_handover_is_on(self):
+		off = FakeSettings([Row(document_type="Lead", can_read=1)], handoff_enabled=0)
+		on = FakeSettings([Row(document_type="Lead", can_read=1)], handoff_enabled=1)
+		self.assertNotIn("hand_over", {t["name"] for t in registry.build_schemas(off)})
+		self.assertIn("hand_over", {t["name"] for t in registry.build_schemas(on)})
+
+	def test_handover_is_not_gated_on_a_doctype(self):
+		# It acts on the conversation, so there is no policy to check.
+		self.assertIsNone(registry.TOOL_OPERATIONS["hand_over"])
+
+	def test_calling_it_returns_a_usable_result(self):
+		result = registry.call("hand_over", {"reason": "angry customer"}, None)
+		self.assertTrue(result.get("handed_over"))
+
+
+# --------------------------------------------------------------------------
+# Voice notes.
+# --------------------------------------------------------------------------
+
+from agent_x.agent import audio  # noqa: E402
+
+
+class TestVoiceDetection(unittest.TestCase):
+	def test_whatsapp_voice_note_types(self):
+		for kind in ("audio", "voice", "ptt"):
+			self.assertTrue(audio.is_voice(kind, None), kind)
+
+	def test_a_forwarded_audio_file_is_caught_by_extension(self):
+		self.assertTrue(audio.is_voice("document", {"filename": "note.ogg"}))
+		self.assertTrue(audio.is_voice("document", {"filename": "recording.m4a"}))
+
+	def test_text_and_images_are_not_voice(self):
+		self.assertFalse(audio.is_voice("text", None))
+		self.assertFalse(audio.is_voice("image", {"filename": "photo.jpg"}))
+
+	def test_mime_comes_from_the_provider_when_it_says(self):
+		self.assertEqual(audio.guess_mime({"mimetype": "audio/mp4"}), "audio/mp4")
+
+	def test_codec_parameters_are_stripped(self):
+		# Providers send "audio/ogg; codecs=opus", which the model rejects.
+		self.assertEqual(audio.guess_mime({"mimetype": "audio/ogg; codecs=opus"}), "audio/ogg")
+
+	def test_mime_falls_back_to_the_extension(self):
+		self.assertEqual(audio.guess_mime({"filename": "note.mp3"}), "audio/mp3")
+
+	def test_an_unknown_shape_defaults_to_the_whatsapp_format(self):
+		self.assertEqual(audio.guess_mime({}), "audio/ogg")
+
+	def test_transcription_is_skipped_when_switched_off(self):
+		class Off:
+			transcribe_voice_notes = 0
+
+		self.assertEqual(audio.transcribe({"url": "http://x/a.ogg"}, Off()), "")
+
+	def test_only_gemini_transcribes_today(self):
+		class Claude:
+			transcribe_voice_notes = 1
+			ai_provider = "Anthropic Claude"
+
+		self.assertEqual(audio.transcribe({"url": "http://x/a.ogg"}, Claude()), "")
+
+
+# --------------------------------------------------------------------------
+# Corrections.
+# --------------------------------------------------------------------------
+
+
+class TestCorrectionFormatting(unittest.TestCase):
+	def setUp(self):
+		from agent_x.agentx.doctype.agent_correction import agent_correction
+
+		self.module = agent_correction
+
+	def test_nothing_renders_for_no_corrections(self):
+		self.assertEqual(self.module.format_for_prompt([]), "")
+
+	def test_a_correction_is_stated_as_overriding(self):
+		text = self.module.format_for_prompt(
+			[{"applies_when": "asked about refunds", "wrong_reply": "we never refund",
+			  "correct_behaviour": "say refunds take 7 days"}]
+		)
+		self.assertIn("overrides", text)
+		self.assertIn("asked about refunds", text)
+		self.assertIn("we never refund", text)
+		self.assertIn("say refunds take 7 days", text)
+
+	def test_a_correction_without_a_wrong_reply_still_renders(self):
+		text = self.module.format_for_prompt(
+			[{"applies_when": "greeting", "correct_behaviour": "use their first name"}]
+		)
+		self.assertIn("use their first name", text)
+		self.assertNotIn("wrongly said", text)
+
+	def test_corrections_are_numbered_so_the_model_can_count_them(self):
+		text = self.module.format_for_prompt(
+			[{"applies_when": "a", "correct_behaviour": "x"},
+			 {"applies_when": "b", "correct_behaviour": "y"}]
+		)
+		self.assertIn("1. When: a", text)
+		self.assertIn("2. When: b", text)
 
 
 if __name__ == "__main__":

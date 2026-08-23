@@ -12,7 +12,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
-from agent_x.agent import drafts, knowledge, policy, prompt, provider, registry, summary
+from agent_x.agent import drafts, handoff, knowledge, policy, prompt, provider, registry, summary
 from agent_x.agent.tools.documents import ToolContext
 from agent_x.agentx.doctype.agent_conversation import agent_conversation
 from agent_x.agentx.doctype.whatsapp_contact.whatsapp_contact import acting_user as resolve_user
@@ -52,11 +52,25 @@ def handle(
 	user = resolve_user(contact, settings)
 	conversation = agent_conversation.get_or_create(contact.name, session, user)
 
+	# While a person has the conversation the assistant says nothing at all.
+	# Two voices answering one customer is worse than a slow reply.
+	if handoff.is_held(conversation, settings):
+		return None
+
 	# A pending change owns the next reply: it is a yes or no question.
 	if conversation.status == "Awaiting Confirmation":
 		answered = resolve_confirmation(conversation, text, settings)
 		if answered:
 			return answered
+
+	# Asking for a human is answered by fetching one, not by the assistant
+	# trying harder.
+	if handoff.asked_for_a_person(text, settings):
+		handoff.start(conversation, settings, reason=_("The customer asked for a person."))
+		return AgentResult(
+			(settings.handoff_message or "").strip()
+			or _("Let me get a person to help you. Someone will reply shortly.")
+		)
 
 	return run_agent(inbound, contact, conversation, settings, user, session, exclude_message)
 
@@ -218,7 +232,10 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 	# Look up only what this message needs, rather than carrying the whole
 	# knowledge base in every prompt.
 	retrieved, hits = knowledge.context_for(inbound.get("message") or "", settings)
-	system = prompt.build(settings, contact, user, knowledge=retrieved)
+	corrections = load_corrections(settings)
+	system = prompt.build(
+		settings, contact, user, knowledge=retrieved, corrections=corrections
+	)
 
 	turns = history(contact, settings, exclude_message)
 	turns.append(user_turn(inbound, settings))
@@ -227,6 +244,7 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 	usage = {"input_tokens": 0, "output_tokens": 0}
 	reply_text = ""
 	pending_action: str | None = None
+	handed_over = False
 
 	max_steps = settings.max_tool_iterations or 6
 
@@ -248,6 +266,14 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 			)
 
 			for call in answer.tool_calls:
+				if call["name"] == "hand_over":
+					handoff.start(
+						conversation,
+						settings,
+						reason=(call.get("args") or {}).get("reason"),
+					)
+					handed_over = True
+
 				result = registry.call(call["name"], call.get("args") or {}, ctx)
 				trace.append({"step": step, "tool": call["name"], "args": call.get("args"), "result": summarise(result)})
 
@@ -292,6 +318,11 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 			conversation.db_set("last_message_on", now_datetime(), update_modified=False)
 			return AgentResult(confirmation, run.name, pending=pending_action)
 
+	if handed_over and not reply_text.strip():
+		reply_text = (settings.handoff_message or "").strip() or _(
+			"Let me get a person to help you. Someone will reply shortly."
+		)
+
 	if not reply_text.strip():
 		reply_text = (settings.fallback_reply or "").strip() or _(
 			"Sorry, I could not work that out. Let me get a person to help."
@@ -319,10 +350,29 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 
 	conversation.db_set("last_message_on", now_datetime(), update_modified=False)
 
-	return AgentResult(reply_text, run.name, pending=pending_action)
+	if corrections:
+		from agent_x.agentx.doctype.agent_correction.agent_correction import record_applied
+
+		record_applied([c["name"] for c in corrections])
+
+	return AgentResult(reply_text, run.name, pending=pending_action, handed_over=handed_over)
 
 
 # ------------------------------------------------------------------ helpers
+
+
+def load_corrections(settings) -> list[dict]:
+	"""Lessons from replies that went wrong. Never blocks a reply."""
+	if not settings.use_corrections:
+		return []
+
+	try:
+		from agent_x.agentx.doctype.agent_correction.agent_correction import get_active
+
+		return get_active(settings.correction_limit or 20)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "AgentX: could not load corrections")
+		return []
 
 
 def confirmation_text(action_name: str) -> str | None:
@@ -342,6 +392,17 @@ def user_turn(inbound: dict, settings) -> dict:
 
 	if kind == "text":
 		return {"role": "user", "text": text}
+
+	# A transcribed voice note is just what they said.
+	if inbound.get("transcribed") and text:
+		return {"role": "user", "text": text}
+
+	if inbound.get("transcription_failed"):
+		return {
+			"role": "user",
+			"text": "[The customer sent a voice note that could not be transcribed. "
+			"Apologise briefly and ask them to type it instead.]",
+		}
 
 	labels = {
 		"image": "a photo",

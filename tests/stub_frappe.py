@@ -94,6 +94,16 @@ def install() -> None:
 	utils.get_time = lambda v: v
 	utils.nowdate = lambda: "2026-08-23"
 
+	import datetime as _dt
+
+	def _getdate(v=None):
+		if v is None:
+			return _dt.date(2026, 8, 23)
+		return v if isinstance(v, _dt.date) else _dt.date.fromisoformat(str(v)[:10])
+
+	utils.getdate = _getdate
+	utils.add_days = lambda d, days: _getdate(d) + _dt.timedelta(days=days or 0)
+
 	def _flt(v, precision=None):
 		try:
 			return float(v or 0)

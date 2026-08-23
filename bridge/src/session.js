@@ -13,7 +13,7 @@ import QRCode from "qrcode";
 
 import { config } from "./config.js";
 import { baileysLogger, logger } from "./logger.js";
-import { isGroup, normalise } from "./messages.js";
+import { isGroup, isVoice, normalise } from "./messages.js";
 import { deliver } from "./webhook.js";
 
 // Reconnect with a backoff so a server-side outage does not become a hot loop.
@@ -213,6 +213,12 @@ class Session {
 			// Status broadcasts are not conversations.
 			if (event.chat_id === "status@broadcast") continue;
 
+			// Decryption needs this message object, which we will not have later,
+			// so a voice note is fetched now or not at all.
+			if (!event.from_me && isVoice(event)) {
+				event.media = { ...event.media, base64: await this.inlineAudio(raw, event) };
+			}
+
 			await this.emit("message", { message: event });
 		}
 	}
@@ -273,6 +279,31 @@ class Session {
 
 		const result = await this.sock.sendMessage(jid, payload);
 		return { message_id: result?.key?.id || null, chat_id: jid };
+	}
+
+	/** Fetch a voice note now, while the message can still be decrypted. */
+	async inlineAudio(raw, event) {
+		const size = event.media?.size || 0;
+		if (size && size > config.inlineAudioMaxBytes) {
+			logger.info({ session: this.id, size }, "voice note too large to inline");
+			return undefined;
+		}
+
+		try {
+			const buffer = await downloadMediaMessage(
+				raw,
+				"buffer",
+				{},
+				{ logger: baileysLogger, reuploadRequest: this.sock.updateMediaMessage },
+			);
+
+			if (buffer.length > config.inlineAudioMaxBytes) return undefined;
+			return buffer.toString("base64");
+		} catch (error) {
+			// A voice note we cannot fetch should still arrive as a message.
+			logger.warn({ session: this.id, err: error.message }, "could not fetch voice note");
+			return undefined;
+		}
 	}
 
 	/** Re-download the bytes of a message we already received. */

@@ -1,0 +1,811 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "connection_tab",
+  "enabled",
+  "whatsapp_provider_section",
+  "whatsapp_provider",
+  "provider_help",
+  "bridge_section",
+  "bridge_url",
+  "bridge_api_token",
+  "waclient_section",
+  "waclient_access_token",
+  "column_break_waclient",
+  "waclient_api_url",
+  "general_section",
+  "default_session",
+  "column_break_general",
+  "request_timeout",
+  "bridge_status_section",
+  "bridge_status_html",
+  "webhook_section",
+  "webhook_url",
+  "public_base_url",
+  "column_break_webhook",
+  "verify_signature",
+  "webhook_secret",
+  "webhook_token",
+  "numbers_section",
+  "default_country_code",
+  "ai_tab",
+  "ai_enabled",
+  "provider_section",
+  "ai_provider",
+  "ai_model",
+  "column_break_provider",
+  "ai_api_key",
+  "ai_api_base_url",
+  "prompt_section",
+  "business_context",
+  "system_prompt",
+  "tuning_section",
+  "ai_temperature",
+  "ai_max_output_tokens",
+  "history_limit",
+  "column_break_tuning",
+  "max_tool_iterations",
+  "max_reply_characters",
+  "vision_section",
+  "ai_read_images",
+  "ai_max_image_mb",
+  "automation_tab",
+  "automation_enabled",
+  "identity_section",
+  "agent_user",
+  "require_user_mapping",
+  "safety_section",
+  "confirm_before_write",
+  "confirm_timeout_minutes",
+  "column_break_safety",
+  "max_actions_per_conversation",
+  "dry_run",
+  "catalogue_section",
+  "enable_catalogue",
+  "show_stock_levels",
+  "hide_out_of_stock",
+  "column_break_catalogue",
+  "default_price_list",
+  "catalogue_item_group",
+  "documents_section",
+  "allow_document_pdfs",
+  "column_break_documents",
+  "pdf_retention_hours",
+  "send_draft_after_lines",
+  "policy_section",
+  "policy_help",
+  "doctype_policies",
+  "access_tab",
+  "scope_section",
+  "reply_scope",
+  "reply_to_groups",
+  "allowed_section",
+  "allowed_numbers",
+  "excluded_section",
+  "excluded_numbers",
+  "hours_section",
+  "restrict_business_hours",
+  "working_days",
+  "column_break_hours",
+  "business_hours_start",
+  "business_hours_end",
+  "outside_hours_reply",
+  "courtesy_section",
+  "mark_messages_read",
+  "send_typing_indicator",
+  "knowledge_tab",
+  "knowledge_enabled",
+  "knowledge_help",
+  "embedding_section",
+  "embedding_provider",
+  "embedding_model",
+  "column_break_embedding",
+  "embedding_api_key",
+  "retrieval_section",
+  "retrieval_top_k",
+  "retrieval_min_score",
+  "column_break_retrieval",
+  "chunk_size",
+  "chunk_overlap",
+  "logging_tab",
+  "log_messages",
+  "store_raw_payload",
+  "column_break_logging",
+  "log_retention_days",
+  "fallback_reply"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connection"
+  },
+  {
+   "bold": 1,
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enable AgentX"
+  },
+  {
+   "fieldname": "whatsapp_provider_section",
+   "fieldtype": "Section Break",
+   "label": "Provider"
+  },
+  {
+   "bold": 1,
+   "default": "WaClient",
+   "description": "WaClient is hosted, so it works on Frappe Cloud. The self-hosted bridge needs a server you control.",
+   "fieldname": "whatsapp_provider",
+   "fieldtype": "Select",
+   "label": "WhatsApp Provider",
+   "options": "WaClient\nSelf-Hosted Bridge",
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider_help",
+   "fieldtype": "HTML",
+   "label": "Provider Help"
+  },
+  {
+   "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
+   "fieldname": "bridge_section",
+   "fieldtype": "Section Break",
+   "label": "WhatsApp Bridge"
+  },
+  {
+   "default": "http://127.0.0.1:8787",
+   "description": "Where the Node bridge listens. Keep it on loopback.",
+   "fieldname": "bridge_url",
+   "fieldtype": "Data",
+   "label": "Bridge URL",
+   "mandatory_depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\""
+  },
+  {
+   "description": "Must match BRIDGE_API_TOKEN in the bridge environment.",
+   "fieldname": "bridge_api_token",
+   "fieldtype": "Password",
+   "label": "Bridge API Token",
+   "mandatory_depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\""
+  },
+  {
+   "depends_on": "eval:doc.whatsapp_provider==\"WaClient\"",
+   "fieldname": "waclient_section",
+   "fieldtype": "Section Break",
+   "label": "WaClient"
+  },
+  {
+   "description": "From your WaClient dashboard.",
+   "fieldname": "waclient_access_token",
+   "fieldtype": "Password",
+   "label": "Access Token",
+   "mandatory_depends_on": "eval:doc.whatsapp_provider==\"WaClient\""
+  },
+  {
+   "fieldname": "column_break_waclient",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "https://api.waclient.com",
+   "description": "Leave as is unless WaClient tells you otherwise.",
+   "fieldname": "waclient_api_url",
+   "fieldtype": "Data",
+   "label": "API Base URL"
+  },
+  {
+   "fieldname": "general_section",
+   "fieldtype": "Section Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "default_session",
+   "fieldtype": "Link",
+   "label": "Default Session",
+   "options": "WhatsApp Session"
+  },
+  {
+   "fieldname": "column_break_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "30",
+   "fieldname": "request_timeout",
+   "fieldtype": "Int",
+   "label": "Request Timeout (seconds)"
+  },
+  {
+   "fieldname": "bridge_status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "fieldname": "bridge_status_html",
+   "fieldtype": "HTML",
+   "label": "Bridge Status"
+  },
+  {
+   "fieldname": "webhook_section",
+   "fieldtype": "Section Break",
+   "label": "Inbound Webhook"
+  },
+  {
+   "description": "Set this as BRIDGE_WEBHOOK_URL in the bridge environment.",
+   "fieldname": "webhook_url",
+   "fieldtype": "Data",
+   "label": "Webhook URL",
+   "read_only": 1
+  },
+  {
+   "description": "Only needed when this site's URL cannot be detected, e.g. behind a proxy.",
+   "fieldname": "public_base_url",
+   "fieldtype": "Data",
+   "label": "Public Base URL"
+  },
+  {
+   "fieldname": "column_break_webhook",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
+   "description": "Reject webhook posts that are not signed with the shared secret. The bridge signs every post; WaClient cannot, so it uses the token instead.",
+   "fieldname": "verify_signature",
+   "fieldtype": "Check",
+   "label": "Verify Signature"
+  },
+  {
+   "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
+   "description": "Must match BRIDGE_WEBHOOK_SECRET in the bridge environment.",
+   "fieldname": "webhook_secret",
+   "fieldtype": "Password",
+   "label": "Webhook Secret"
+  },
+  {
+   "depends_on": "eval:doc.whatsapp_provider==\"WaClient\"",
+   "description": "Appended to the webhook URL as ?token=. WaClient cannot sign its posts, so this is what proves they came from your instance.",
+   "fieldname": "webhook_token",
+   "fieldtype": "Password",
+   "label": "Webhook Token"
+  },
+  {
+   "fieldname": "numbers_section",
+   "fieldtype": "Section Break",
+   "label": "Phone Numbers"
+  },
+  {
+   "description": "Digits only, e.g. 254. Used to expand local numbers like 0712345678.",
+   "fieldname": "default_country_code",
+   "fieldtype": "Data",
+   "label": "Default Country Code"
+  },
+  {
+   "fieldname": "ai_tab",
+   "fieldtype": "Tab Break",
+   "label": "AI Assistant"
+  },
+  {
+   "bold": 1,
+   "fieldname": "ai_enabled",
+   "fieldtype": "Check",
+   "label": "Enable AI Assistant"
+  },
+  {
+   "fieldname": "provider_section",
+   "fieldtype": "Section Break",
+   "label": "Provider"
+  },
+  {
+   "default": "Google Gemini",
+   "fieldname": "ai_provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "options": "Google Gemini\nOpenAI\nAnthropic Claude",
+   "reqd": 1
+  },
+  {
+   "default": "gemini-2.5-flash",
+   "fieldname": "ai_model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "column_break_provider",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ai_api_key",
+   "fieldtype": "Password",
+   "label": "API Key"
+  },
+  {
+   "description": "Leave empty to use the provider default.",
+   "fieldname": "ai_api_base_url",
+   "fieldtype": "Data",
+   "label": "API Base URL Override"
+  },
+  {
+   "fieldname": "prompt_section",
+   "fieldtype": "Section Break",
+   "label": "Instructions"
+  },
+  {
+   "description": "What the assistant should know: what you sell, hours, policies, tone.",
+   "fieldname": "business_context",
+   "fieldtype": "Text",
+   "label": "Business Context"
+  },
+  {
+   "description": "Appended to the built in agent instructions.",
+   "fieldname": "system_prompt",
+   "fieldtype": "Text",
+   "label": "Additional Instructions"
+  },
+  {
+   "fieldname": "tuning_section",
+   "fieldtype": "Section Break",
+   "label": "Tuning"
+  },
+  {
+   "default": "0.3",
+   "fieldname": "ai_temperature",
+   "fieldtype": "Float",
+   "label": "Temperature",
+   "precision": "2"
+  },
+  {
+   "default": "2048",
+   "fieldname": "ai_max_output_tokens",
+   "fieldtype": "Int",
+   "label": "Max Output Tokens"
+  },
+  {
+   "default": "12",
+   "fieldname": "history_limit",
+   "fieldtype": "Int",
+   "label": "Conversation History Depth"
+  },
+  {
+   "fieldname": "column_break_tuning",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "6",
+   "description": "How many times the model may call tools before it must answer.",
+   "fieldname": "max_tool_iterations",
+   "fieldtype": "Int",
+   "label": "Max Tool Steps Per Turn"
+  },
+  {
+   "default": "1500",
+   "fieldname": "max_reply_characters",
+   "fieldtype": "Int",
+   "label": "Max Reply Characters"
+  },
+  {
+   "fieldname": "vision_section",
+   "fieldtype": "Section Break",
+   "label": "Images"
+  },
+  {
+   "default": "1",
+   "fieldname": "ai_read_images",
+   "fieldtype": "Check",
+   "label": "Let the AI Read Images"
+  },
+  {
+   "default": "4",
+   "depends_on": "ai_read_images",
+   "fieldname": "ai_max_image_mb",
+   "fieldtype": "Int",
+   "label": "Max Image Size (MB)"
+  },
+  {
+   "fieldname": "automation_tab",
+   "fieldtype": "Tab Break",
+   "label": "Automation"
+  },
+  {
+   "bold": 1,
+   "description": "Lets the assistant read and change documents on request.",
+   "fieldname": "automation_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Document Automation"
+  },
+  {
+   "fieldname": "identity_section",
+   "fieldtype": "Section Break",
+   "label": "Identity"
+  },
+  {
+   "description": "Permissions are checked against this user when a number is not mapped to one.",
+   "fieldname": "agent_user",
+   "fieldtype": "Link",
+   "label": "Default Acts As User",
+   "options": "User"
+  },
+  {
+   "default": "1",
+   "description": "Refuse document actions from numbers with no Acts As User.",
+   "fieldname": "require_user_mapping",
+   "fieldtype": "Check",
+   "label": "Only Act for Mapped Numbers"
+  },
+  {
+   "fieldname": "safety_section",
+   "fieldtype": "Section Break",
+   "label": "Safety"
+  },
+  {
+   "default": "1",
+   "description": "The assistant describes the change and waits for a yes.",
+   "fieldname": "confirm_before_write",
+   "fieldtype": "Check",
+   "label": "Confirm Before Writing"
+  },
+  {
+   "default": "10",
+   "fieldname": "confirm_timeout_minutes",
+   "fieldtype": "Int",
+   "label": "Confirmation Timeout (minutes)"
+  },
+  {
+   "fieldname": "column_break_safety",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "20",
+   "fieldname": "max_actions_per_conversation",
+   "fieldtype": "Int",
+   "label": "Max Actions Per Conversation"
+  },
+  {
+   "description": "Plan and log actions without actually writing. Use while testing.",
+   "fieldname": "dry_run",
+   "fieldtype": "Check",
+   "label": "Dry Run"
+  },
+  {
+   "fieldname": "catalogue_section",
+   "fieldtype": "Section Break",
+   "label": "Item Catalogue"
+  },
+  {
+   "default": "1",
+   "description": "Needs a policy row for Item with read ticked.",
+   "fieldname": "enable_catalogue",
+   "fieldtype": "Check",
+   "label": "Let Customers Browse Items"
+  },
+  {
+   "default": "1",
+   "depends_on": "enable_catalogue",
+   "fieldname": "show_stock_levels",
+   "fieldtype": "Check",
+   "label": "Show Stock Levels"
+  },
+  {
+   "depends_on": "enable_catalogue",
+   "fieldname": "hide_out_of_stock",
+   "fieldtype": "Check",
+   "label": "Hide Out of Stock Items"
+  },
+  {
+   "fieldname": "column_break_catalogue",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "enable_catalogue",
+   "description": "Empty uses the one in Selling Settings.",
+   "fieldname": "default_price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "Price List"
+  },
+  {
+   "depends_on": "enable_catalogue",
+   "description": "Empty offers everything sellable.",
+   "fieldname": "catalogue_item_group",
+   "fieldtype": "Link",
+   "label": "Only This Item Group",
+   "options": "Item Group"
+  },
+  {
+   "fieldname": "documents_section",
+   "fieldtype": "Section Break",
+   "label": "Sending Documents"
+  },
+  {
+   "default": "1",
+   "description": "Uses the print format this site already uses for the document.",
+   "fieldname": "allow_document_pdfs",
+   "fieldtype": "Check",
+   "label": "Let the Assistant Send Document PDFs"
+  },
+  {
+   "fieldname": "column_break_documents",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "24",
+   "depends_on": "allow_document_pdfs",
+   "description": "A hosted provider fetches the PDF from a public URL, so it stays readable until deleted. 0 keeps them forever.",
+   "fieldname": "pdf_retention_hours",
+   "fieldtype": "Int",
+   "label": "Delete Sent PDFs After (hours)"
+  },
+  {
+   "default": "5",
+   "depends_on": "allow_document_pdfs",
+   "description": "Automatically send a created document back as a PDF once it has this many lines, so the customer can review it. 0 never sends.",
+   "fieldname": "send_draft_after_lines",
+   "fieldtype": "Int",
+   "label": "Send Draft PDF From (lines)"
+  },
+  {
+   "fieldname": "policy_section",
+   "fieldtype": "Section Break",
+   "label": "What the Assistant May Touch"
+  },
+  {
+   "fieldname": "policy_help",
+   "fieldtype": "HTML",
+   "label": "Policy Help"
+  },
+  {
+   "fieldname": "doctype_policies",
+   "fieldtype": "Table",
+   "label": "Document Policies",
+   "options": "AgentX Doctype Policy"
+  },
+  {
+   "fieldname": "access_tab",
+   "fieldtype": "Tab Break",
+   "label": "Access"
+  },
+  {
+   "fieldname": "scope_section",
+   "fieldtype": "Section Break",
+   "label": "Who Gets Replies"
+  },
+  {
+   "default": "Only Allowed Numbers",
+   "fieldname": "reply_scope",
+   "fieldtype": "Select",
+   "label": "Reply To",
+   "options": "Everyone\nOnly Allowed Numbers"
+  },
+  {
+   "fieldname": "reply_to_groups",
+   "fieldtype": "Check",
+   "label": "Reply in Group Chats"
+  },
+  {
+   "depends_on": "eval:doc.reply_scope=='Only Allowed Numbers'",
+   "fieldname": "allowed_section",
+   "fieldtype": "Section Break",
+   "label": "Allowed Numbers"
+  },
+  {
+   "fieldname": "allowed_numbers",
+   "fieldtype": "Table",
+   "label": "Allowed Numbers",
+   "options": "AgentX Allowed Number"
+  },
+  {
+   "fieldname": "excluded_section",
+   "fieldtype": "Section Break",
+   "label": "Never Reply To"
+  },
+  {
+   "fieldname": "excluded_numbers",
+   "fieldtype": "Table",
+   "label": "Excluded Numbers",
+   "options": "AgentX Excluded Number"
+  },
+  {
+   "fieldname": "hours_section",
+   "fieldtype": "Section Break",
+   "label": "Business Hours"
+  },
+  {
+   "fieldname": "restrict_business_hours",
+   "fieldtype": "Check",
+   "label": "Restrict to Business Hours"
+  },
+  {
+   "default": "Mon,Tue,Wed,Thu,Fri",
+   "depends_on": "restrict_business_hours",
+   "fieldname": "working_days",
+   "fieldtype": "Data",
+   "label": "Working Days"
+  },
+  {
+   "fieldname": "column_break_hours",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "restrict_business_hours",
+   "fieldname": "business_hours_start",
+   "fieldtype": "Time",
+   "label": "Opens At"
+  },
+  {
+   "depends_on": "restrict_business_hours",
+   "fieldname": "business_hours_end",
+   "fieldtype": "Time",
+   "label": "Closes At"
+  },
+  {
+   "depends_on": "restrict_business_hours",
+   "fieldname": "outside_hours_reply",
+   "fieldtype": "Small Text",
+   "label": "Outside Hours Reply"
+  },
+  {
+   "fieldname": "courtesy_section",
+   "fieldtype": "Section Break",
+   "label": "Conversation Manners"
+  },
+  {
+   "default": "1",
+   "description": "Show blue ticks when the assistant picks a message up.",
+   "fieldname": "mark_messages_read",
+   "fieldtype": "Check",
+   "label": "Mark Incoming Messages Read"
+  },
+  {
+   "default": "1",
+   "description": "The assistant appears to be typing while it works, instead of going quiet.",
+   "fieldname": "send_typing_indicator",
+   "fieldtype": "Check",
+   "label": "Show Typing While Thinking"
+  },
+  {
+   "fieldname": "knowledge_tab",
+   "fieldtype": "Tab Break",
+   "label": "Knowledge"
+  },
+  {
+   "bold": 1,
+   "description": "Look up only the passages each message needs, instead of carrying everything in the prompt. Worth turning on once the material is longer than about a page.",
+   "fieldname": "knowledge_enabled",
+   "fieldtype": "Check",
+   "label": "Use a Knowledge Base"
+  },
+  {
+   "fieldname": "knowledge_help",
+   "fieldtype": "HTML",
+   "label": "Knowledge Help"
+  },
+  {
+   "depends_on": "knowledge_enabled",
+   "fieldname": "embedding_section",
+   "fieldtype": "Section Break",
+   "label": "Embeddings"
+  },
+  {
+   "description": "Empty follows the AI provider. Anthropic has no embeddings API, so a Claude install uses Gemini here.",
+   "fieldname": "embedding_provider",
+   "fieldtype": "Select",
+   "label": "Embedding Provider",
+   "options": "\nGoogle Gemini\nOpenAI"
+  },
+  {
+   "description": "Empty uses text-embedding-004 for Gemini, text-embedding-3-small for OpenAI.",
+   "fieldname": "embedding_model",
+   "fieldtype": "Data",
+   "label": "Embedding Model"
+  },
+  {
+   "fieldname": "column_break_embedding",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Only needed when embeddings use a different provider from the chat model.",
+   "fieldname": "embedding_api_key",
+   "fieldtype": "Password",
+   "label": "Embedding API Key"
+  },
+  {
+   "depends_on": "knowledge_enabled",
+   "fieldname": "retrieval_section",
+   "fieldtype": "Section Break",
+   "label": "Retrieval"
+  },
+  {
+   "default": "4",
+   "fieldname": "retrieval_top_k",
+   "fieldtype": "Int",
+   "label": "Passages Per Message"
+  },
+  {
+   "default": "0.5",
+   "description": "Below this a passage is treated as unrelated and left out. 0 keeps the top matches whatever they score.",
+   "fieldname": "retrieval_min_score",
+   "fieldtype": "Float",
+   "label": "Minimum Similarity",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_retrieval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1200",
+   "fieldname": "chunk_size",
+   "fieldtype": "Int",
+   "label": "Chunk Size (characters)"
+  },
+  {
+   "default": "150",
+   "description": "Carries the tail of each chunk into the next, so a rule spanning a boundary is still found.",
+   "fieldname": "chunk_overlap",
+   "fieldtype": "Int",
+   "label": "Chunk Overlap (characters)"
+  },
+  {
+   "fieldname": "logging_tab",
+   "fieldtype": "Tab Break",
+   "label": "Logging"
+  },
+  {
+   "default": "1",
+   "fieldname": "log_messages",
+   "fieldtype": "Check",
+   "label": "Log Messages"
+  },
+  {
+   "description": "Useful while debugging, heavy in normal use.",
+   "fieldname": "store_raw_payload",
+   "fieldtype": "Check",
+   "label": "Store Raw Payloads"
+  },
+  {
+   "fieldname": "column_break_logging",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "90",
+   "description": "0 keeps them forever.",
+   "fieldname": "log_retention_days",
+   "fieldtype": "Int",
+   "label": "Delete Logs After (days)"
+  },
+  {
+   "description": "Sent when the assistant cannot answer at all.",
+   "fieldname": "fallback_reply",
+   "fieldtype": "Small Text",
+   "label": "Fallback Reply"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "AgentX Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

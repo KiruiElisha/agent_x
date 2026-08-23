@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-23 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "knowledge",
+  "chunk_index",
+  "column_break_head",
+  "tokens",
+  "dimensions",
+  "content_section",
+  "content",
+  "vector_section",
+  "embedding"
+ ],
+ "fields": [
+  {
+   "fieldname": "knowledge",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Knowledge",
+   "options": "Agent Knowledge",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "chunk_index",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Index"
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tokens",
+   "fieldtype": "Int",
+   "label": "Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "dimensions",
+   "fieldtype": "Int",
+   "label": "Dimensions",
+   "read_only": 1
+  },
+  {
+   "fieldname": "content_section",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "in_list_view": 1,
+   "label": "Content"
+  },
+  {
+   "fieldname": "vector_section",
+   "fieldtype": "Section Break",
+   "label": "Vector"
+  },
+  {
+   "fieldname": "embedding",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Embedding",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "Agent Knowledge Chunk",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 0,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

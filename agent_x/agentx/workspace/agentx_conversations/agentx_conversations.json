@@ -1,0 +1,94 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"conversations\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Conversations</b></span>\", \"col\": 12}}, {\"id\": \"sc_messages\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Messages\", \"col\": 3}}, {\"id\": \"sc_contacts\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Contacts\", \"col\": 3}}, {\"id\": \"sc_open_conversations\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Open Conversations\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
+ "creation": "2026-08-23 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "message",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Conversations",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "All Documents",
+   "link_count": 3,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "WhatsApp Message",
+   "link_count": 0,
+   "link_to": "WhatsApp Message",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "WhatsApp Contact",
+   "link_count": 0,
+   "link_to": "WhatsApp Contact",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Conversation",
+   "link_count": 0,
+   "link_to": "Agent Conversation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "AgentX Conversations",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "AgentX",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 2.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "Messages",
+   "link_to": "WhatsApp Message",
+   "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "label": "Contacts",
+   "link_to": "WhatsApp Contact",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "label": "Open Conversations",
+   "link_to": "Agent Conversation",
+   "stats_filter": "{\"status\": \"Active\"}",
+   "type": "DocType"
+  }
+ ],
+ "title": "Conversations"
+}

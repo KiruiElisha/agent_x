@@ -1,0 +1,202 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:session_name",
+ "creation": "2026-08-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "session_name",
+  "enabled",
+  "is_default",
+  "instance_id",
+  "provider",
+  "column_break_head",
+  "state",
+  "phone_number",
+  "display_name",
+  "pairing_section",
+  "pairing_html",
+  "qr_data",
+  "qr_expires_at",
+  "activity_section",
+  "last_connected_on",
+  "last_event_on",
+  "column_break_activity",
+  "messages_received",
+  "messages_sent",
+  "error_section",
+  "last_error"
+ ],
+ "fields": [
+  {
+   "description": "Lowercase letters, digits, dash or underscore. Becomes the folder name on the bridge.",
+   "fieldname": "session_name",
+   "fieldtype": "Data",
+   "label": "Session Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "description": "Used when a send does not name a session.",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Default Session"
+  },
+  {
+   "depends_on": "eval:doc.provider==\"WaClient\"",
+   "description": "From your WaClient dashboard. Each instance is one WhatsApp number.",
+   "fieldname": "instance_id",
+   "fieldtype": "Data",
+   "label": "WaClient Instance ID"
+  },
+  {
+   "description": "Taken from AgentX Settings when the session is saved.",
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "options": "\nWaClient\nSelf-Hosted Bridge",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Disconnected",
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "State",
+   "no_copy": 1,
+   "options": "Disconnected\nPairing\nConnected\nLogged Out",
+   "read_only": 1
+  },
+  {
+   "fieldname": "phone_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Linked Number",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "display_name",
+   "fieldtype": "Data",
+   "label": "Profile Name",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "pairing_section",
+   "fieldtype": "Section Break",
+   "label": "Pairing"
+  },
+  {
+   "fieldname": "pairing_html",
+   "fieldtype": "HTML",
+   "label": "Pairing"
+  },
+  {
+   "fieldname": "qr_data",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "QR Data URL",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "qr_expires_at",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "QR Expires At",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "activity_section",
+   "fieldtype": "Section Break",
+   "label": "Activity"
+  },
+  {
+   "fieldname": "last_connected_on",
+   "fieldtype": "Datetime",
+   "label": "Last Connected",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_event_on",
+   "fieldtype": "Datetime",
+   "label": "Last Event",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_activity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "messages_received",
+   "fieldtype": "Int",
+   "label": "Messages Received",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "messages_sent",
+   "fieldtype": "Int",
+   "label": "Messages Sent",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.last_error",
+   "fieldname": "error_section",
+   "fieldtype": "Section Break",
+   "label": "Last Error"
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "WhatsApp Session",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "session_name",
+ "track_changes": 1
+}

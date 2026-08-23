@@ -1,0 +1,84 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"what_the_assistant_did\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>What the Assistant Did</b></span>\", \"col\": 12}}, {\"id\": \"sc_needs_approval\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Needs Approval\", \"col\": 3}}, {\"id\": \"sc_executed\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Executed\", \"col\": 3}}, {\"id\": \"sc_agent_runs\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Agent Runs\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"card_all_documents\", \"type\": \"card\", \"data\": {\"card_name\": \"All Documents\", \"col\": 4}}]",
+ "creation": "2026-08-23 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "tool",
+ "idx": 0,
+ "indicator_color": "orange",
+ "is_hidden": 0,
+ "label": "Automation",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "All Documents",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Action",
+   "link_count": 0,
+   "link_to": "Agent Action",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Run",
+   "link_count": 0,
+   "link_to": "Agent Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "AgentX Automation",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "AgentX",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 3.0,
+ "shortcuts": [
+  {
+   "color": "Orange",
+   "doc_view": "",
+   "label": "Needs Approval",
+   "link_to": "Agent Action",
+   "stats_filter": "{\"status\": \"Pending\"}",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "label": "Executed",
+   "link_to": "Agent Action",
+   "stats_filter": "{\"status\": \"Executed\"}",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "Agent Runs",
+   "link_to": "Agent Run",
+   "type": "DocType"
+  }
+ ],
+ "title": "Automation"
+}

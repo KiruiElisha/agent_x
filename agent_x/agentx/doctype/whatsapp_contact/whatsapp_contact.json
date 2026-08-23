@@ -1,0 +1,169 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:wa_id",
+ "creation": "2026-08-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "wa_id",
+  "contact_name",
+  "push_name",
+  "column_break_head",
+  "is_group",
+  "blocked",
+  "opted_out",
+  "identity_section",
+  "user",
+  "customer",
+  "column_break_identity",
+  "supplier",
+  "lead",
+  "activity_section",
+  "last_incoming_on",
+  "last_outgoing_on",
+  "column_break_activity",
+  "message_count",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "wa_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "WhatsApp Number",
+   "reqd": 1,
+   "search_index": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "contact_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Name"
+  },
+  {
+   "fieldname": "push_name",
+   "fieldtype": "Data",
+   "label": "WhatsApp Profile Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_group",
+   "fieldtype": "Check",
+   "label": "Group Chat",
+   "read_only": 1
+  },
+  {
+   "description": "Never reply to this contact.",
+   "fieldname": "blocked",
+   "fieldtype": "Check",
+   "label": "Blocked"
+  },
+  {
+   "fieldname": "opted_out",
+   "fieldtype": "Check",
+   "label": "Opted Out"
+  },
+  {
+   "fieldname": "identity_section",
+   "fieldtype": "Section Break",
+   "label": "Identity"
+  },
+  {
+   "description": "Document actions from this contact run as this user.",
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "Acts As User",
+   "options": "User"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Lead",
+   "options": "Lead"
+  },
+  {
+   "fieldname": "activity_section",
+   "fieldtype": "Section Break",
+   "label": "Activity"
+  },
+  {
+   "fieldname": "last_incoming_on",
+   "fieldtype": "Datetime",
+   "label": "Last Message Received",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_outgoing_on",
+   "fieldtype": "Datetime",
+   "label": "Last Message Sent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_activity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "message_count",
+   "fieldtype": "Int",
+   "label": "Messages Exchanged",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "WhatsApp Contact",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "contact_name,wa_id",
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "contact_name",
+ "track_changes": 1
+}

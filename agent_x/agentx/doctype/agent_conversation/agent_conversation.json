@@ -1,0 +1,134 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "contact",
+  "session",
+  "column_break_head",
+  "status",
+  "acting_user",
+  "state_section",
+  "last_message_on",
+  "action_count",
+  "column_break_state",
+  "summary",
+  "pending_section",
+  "pending_action",
+  "pending_expires_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "contact",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Contact",
+   "options": "WhatsApp Contact",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "session",
+   "fieldtype": "Link",
+   "label": "Session",
+   "options": "WhatsApp Session",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nAwaiting Confirmation\nHanded Over\nClosed"
+  },
+  {
+   "fieldname": "acting_user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Acting As",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "state_section",
+   "fieldtype": "Section Break",
+   "label": "State"
+  },
+  {
+   "fieldname": "last_message_on",
+   "fieldtype": "Datetime",
+   "label": "Last Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "action_count",
+   "fieldtype": "Int",
+   "label": "Actions Taken",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_state",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.status=='Awaiting Confirmation'",
+   "fieldname": "pending_section",
+   "fieldtype": "Section Break",
+   "label": "Pending Confirmation"
+  },
+  {
+   "fieldname": "pending_action",
+   "fieldtype": "Link",
+   "label": "Pending Action",
+   "options": "Agent Action",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pending_expires_on",
+   "fieldtype": "Datetime",
+   "label": "Confirmation Expires",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "Agent Conversation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "contact"
+}

@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "document_type",
+  "can_read",
+  "can_create",
+  "can_write",
+  "can_submit",
+  "can_cancel",
+  "can_delete",
+  "column_break_policy",
+  "requires_approval",
+  "max_per_day",
+  "allowed_fields",
+  "print_format",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "document_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Document Type",
+   "options": "DocType",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "can_read",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Read"
+  },
+  {
+   "fieldname": "can_create",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Create"
+  },
+  {
+   "fieldname": "can_write",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Write"
+  },
+  {
+   "fieldname": "can_submit",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Submit"
+  },
+  {
+   "fieldname": "can_cancel",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Cancel"
+  },
+  {
+   "fieldname": "can_delete",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Delete"
+  },
+  {
+   "fieldname": "column_break_policy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Writes wait for a human to confirm before they run.",
+   "fieldname": "requires_approval",
+   "fieldtype": "Check",
+   "label": "Approval Required"
+  },
+  {
+   "default": "0",
+   "description": "0 means no limit.",
+   "fieldname": "max_per_day",
+   "fieldtype": "Int",
+   "label": "Max Actions Per Day"
+  },
+  {
+   "description": "Comma separated. Empty means every field the user may already write.",
+   "fieldname": "allowed_fields",
+   "fieldtype": "Small Text",
+   "label": "Allowed Fields"
+  },
+  {
+   "description": "Override the site default when the assistant sends this document. Empty uses the default.",
+   "fieldname": "print_format",
+   "fieldtype": "Link",
+   "label": "Print Format",
+   "options": "Print Format"
+  },
+  {
+   "description": "Told to the model as guidance for this doctype.",
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes for the AI"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "AgentX Doctype Policy",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

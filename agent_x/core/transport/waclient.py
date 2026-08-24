@@ -57,12 +57,17 @@ class WaClientTransport(Transport):
 			)
 
 		instance_id = frappe.db.get_value("WhatsApp Session", self.session_name, "instance_id")
+
+		# A single-number setup configures the instance in AgentX Settings and
+		# never opens the session record, so fall back to it.
+		if not instance_id:
+			instance_id = (self.settings.waclient_instance_id or "").strip()
+
 		if not instance_id:
 			frappe.throw(
-				_("WhatsApp Session {0} has no WaClient Instance ID. Add it before connecting.").format(
-					self.session_name
-				)
+				_("No WaClient Instance ID is set. Add it in AgentX Settings under WaClient.")
 			)
+
 		return instance_id
 
 	# ------------------------------------------------------------------ plumbing

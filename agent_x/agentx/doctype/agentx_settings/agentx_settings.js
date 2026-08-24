@@ -4,6 +4,8 @@ frappe.ui.form.on("AgentX Settings", {
 		frm.trigger("render_bridge_status");
 		frm.trigger("render_provider_help");
 		frm.trigger("render_all_warning");
+		frm.trigger("render_connection");
+		frm.trigger("listen_for_pairing");
 
 		frm.add_custom_button(__("Test Connection"), () => test_connection(frm));
 		frm.add_custom_button(__("Test AI"), () => test_ai(frm));
@@ -77,43 +79,38 @@ frappe.ui.form.on("AgentX Settings", {
 		`);
 	},
 
-	render_bridge_status(frm) {
-		const wrapper = frm.get_field("bridge_status_html")?.$wrapper;
+	render_connection(frm) {
+		const wrapper = frm.get_field("connection_html")?.$wrapper;
 		if (!wrapper) return;
 
 		wrapper.empty().append(
-			`<div class="text-muted">${__("Press Test Connection to check the provider.")}</div>`,
+			`<div class="text-muted">${__("Checking…")}</div>`,
 		);
+
+		frm.call({ doc: frm.doc, method: "connection_state" })
+			.then((r) => paint(frm, r.message || {}))
+			.catch(() => paint(frm, { configured: false, state: "Unavailable" }));
 	},
 
-	whatsapp_provider(frm) {
-		frm.trigger("render_provider_help");
-		frm.trigger("render_bridge_status");
-	},
+	listen_for_pairing(frm) {
+		if (frm.__agentx_listening) return;
+		frm.__agentx_listening = true;
 
-	render_provider_help(frm) {
-		const wrapper = frm.get_field("provider_help")?.$wrapper;
-		if (!wrapper) return;
-
-		const hosted =
-			__("WaClient hosts the WhatsApp session for you, so AgentX only makes HTTP calls.") +
-			" " +
-			__("This is the option that works on Frappe Cloud, where nothing long-running can be installed.") +
-			" " +
-			__("The trade is that WaClient holds the session and can read the messages.");
-
-		const own =
-			__("The bridge in this repo runs WhatsApp Web yourself, so no third party sees your messages.") +
-			" " +
-			__("It needs a machine where a Node process can stay running, which rules out Frappe Cloud.");
-
-		wrapper
-			.empty()
-			.append(
-				`<div class="text-muted" style="line-height:1.6;">${
-					frm.doc.whatsapp_provider === "Self-Hosted Bridge" ? own : hosted
-				}</div>`,
-			);
+		// The QR is pushed from the webhook, so nothing here polls.
+		frappe.realtime.on("agentx_session_update", (data) => {
+			if (!data) return;
+			paint(frm, {
+				configured: true,
+				session: data.session,
+				state: data.state,
+				qr: data.qr,
+				phone: data.phone,
+				error: data.error,
+			});
+			if (data.event === "connected") {
+				frappe.show_alert({ message: __("WhatsApp connected"), indicator: "green" });
+			}
+		});
 	},
 });
 
@@ -125,7 +122,7 @@ function test_connection(frm) {
 		freeze_message: __("Checking…"),
 	}).then((r) => {
 		const result = r.message || {};
-		const wrapper = frm.get_field("bridge_status_html").$wrapper;
+		const wrapper = frm.get_field("connection_html").$wrapper;
 		const provider = frappe.utils.escape_html(result.provider || "");
 
 		if (!result.reachable) {
@@ -273,4 +270,89 @@ function ask_agent() {
 		},
 	});
 	dialog.show();
+}
+
+function paint(frm, state) {
+	const wrapper = frm.get_field("connection_html")?.$wrapper;
+	if (!wrapper) return;
+
+	const box = (body, indicator) =>
+		`<div style="padding:14px;border:1px solid var(--border-color);border-radius:8px;">
+			${indicator ? `<span class="indicator ${indicator}"></span>` : ""}${body}
+		 </div>`;
+
+	if (!state.configured) {
+		wrapper
+			.empty()
+			.append(
+				box(
+					`${__("Not set up yet.")} <span class="text-muted">${__(
+						"Fill in the Instance ID and Access Token above, save, then press Connect WhatsApp.",
+					)}</span>`,
+				),
+			);
+		return;
+	}
+
+	if (state.state === "Connected") {
+		wrapper.empty().append(
+			box(
+				`<b>${__("Connected")}</b>
+				 <div class="text-muted" style="margin-top:4px;">
+					${state.phone ? "+" + frappe.utils.escape_html(state.phone) : __("number unknown")}
+				 </div>`,
+				"green",
+			),
+		);
+		return;
+	}
+
+	if (state.qr) {
+		wrapper.empty().append(`
+			<div style="text-align:center;padding:12px 0;">
+				<img src="${frappe.utils.escape_html(state.qr)}" alt="${__("WhatsApp QR code")}"
+				     style="width:240px;height:240px;image-rendering:pixelated;background:#fff;
+				            border:1px solid var(--border-color);border-radius:8px;padding:8px;" />
+				<div class="text-muted" style="margin-top:10px;max-width:340px;margin-inline:auto;line-height:1.5;">
+					${__("On your phone open WhatsApp, go to Linked Devices, and scan this code.")}
+					<br>${__("It refreshes by itself until it is scanned.")}
+				</div>
+			</div>
+		`);
+		return;
+	}
+
+	const detail = state.error
+		? `<div class="text-muted" style="margin-top:4px;">${frappe.utils.escape_html(state.error)}</div>`
+		: `<div class="text-muted" style="margin-top:4px;">${__("Press Connect WhatsApp to pair a phone.")}</div>`;
+
+	wrapper
+		.empty()
+		.append(box(`<b>${frappe.utils.escape_html(state.state || __("Not connected"))}</b>${detail}`,
+			state.state === "Pairing" ? "orange" : "red"));
+}
+
+function connect(frm) {
+	if (frm.is_dirty()) {
+		frappe.msgprint({
+			title: __("Save first"),
+			message: __("Save the settings, then press Connect WhatsApp."),
+			indicator: "orange",
+		});
+		return;
+	}
+
+	frm.call({
+		doc: frm.doc,
+		method: "connect_whatsapp",
+		freeze: true,
+		freeze_message: __("Starting…"),
+	}).then((r) => {
+		const result = r.message || {};
+		frappe.show_alert({
+			message: __("Pairing started on session {0}", [result.session || ""]),
+			indicator: "blue",
+		});
+		frm.trigger("render_connection");
+	});
 }

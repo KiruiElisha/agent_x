@@ -40,6 +40,7 @@ class AgentXSettings(Document):
 		self.public_base_url = (self.public_base_url or "").strip().rstrip("/")
 		self.webhook_url = self.build_webhook_url()
 
+		self.validate_instance()
 		self.validate_policies()
 		self.validate_numbers()
 		self.validate_working_days()
@@ -54,6 +55,12 @@ class AgentXSettings(Document):
 		if self.public_base_url:
 			return f"{self.public_base_url}{WEBHOOK_PATH}"
 		return get_url(WEBHOOK_PATH)
+
+	def validate_instance(self) -> None:
+		self.waclient_instance_id = (self.waclient_instance_id or "").strip()
+
+	def on_update(self) -> None:
+		self.sync_session()
 
 	def validate_policies(self) -> None:
 		seen: set[str] = set()
@@ -259,6 +266,107 @@ class AgentXSettings(Document):
 				title=_("Insecure Webhook URL"),
 				indicator="orange",
 			)
+
+	# ------------------------------------------------------- the connection
+	#
+	# A WhatsApp Session is still the record that holds a linked number, but
+	# nobody setting this up for the first time should have to know that. These
+	# keep one session in step with the settings and drive pairing from here.
+
+	DEFAULT_SESSION_NAME = "main"
+
+	def session_for_setup(self, create: bool = True):
+		"""The session these settings drive, made if it does not exist yet."""
+		name = self.default_session
+
+		if not name:
+			name = frappe.db.get_value("WhatsApp Session", {"is_default": 1}, "name") or frappe.db.get_value(
+				"WhatsApp Session", {}, "name"
+			)
+
+		if name and frappe.db.exists("WhatsApp Session", name):
+			return frappe.get_doc("WhatsApp Session", name)
+
+		if not create:
+			return None
+
+		doc = frappe.get_doc(
+			{
+				"doctype": "WhatsApp Session",
+				"session_name": self.DEFAULT_SESSION_NAME,
+				"enabled": 1,
+				"is_default": 1,
+				"instance_id": self.waclient_instance_id,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+
+		self.db_set("default_session", doc.name, update_modified=False)
+		frappe.db.commit()
+
+		return doc
+
+	def sync_session(self) -> None:
+		"""Push the Instance ID onto the session these settings drive.
+
+		Only fills a session that has none of its own, so a second number
+		configured on its own session is never overwritten.
+		"""
+		if (self.whatsapp_provider or "WaClient") != "WaClient":
+			return
+
+		if not self.waclient_instance_id:
+			return
+
+		session = self.session_for_setup(create=False)
+		if session and not session.instance_id:
+			session.db_set("instance_id", self.waclient_instance_id, update_modified=False)
+
+	@frappe.whitelist()
+	def connect_whatsapp(self) -> dict:
+		"""Start pairing, creating the session if this is the first time."""
+		if (self.whatsapp_provider or "WaClient") == "WaClient" and not self.waclient_instance_id:
+			frappe.throw(_("Enter the WaClient Instance ID first."))
+
+		session = self.session_for_setup()
+		result = session.connect()
+
+		return {"session": session.name, **(result or {})}
+
+	@frappe.whitelist()
+	def connection_state(self) -> dict:
+		"""What the connection panel shows."""
+		session = self.session_for_setup(create=False)
+
+		if not session:
+			return {"configured": False, "state": "Not Set Up"}
+
+		state = {
+			"configured": True,
+			"session": session.name,
+			"state": session.state,
+			"phone": session.phone_number,
+			"qr": session.qr_data,
+			"error": session.last_error,
+			"instance_id": session.instance_id,
+		}
+
+		# Ask the provider rather than trusting what we last stored.
+		try:
+			live = session.refresh_status()
+			state["state"] = session.state
+			state["phone"] = live.get("phone") or state["phone"]
+		except Exception as exc:
+			state["error"] = str(exc)[:300]
+
+		return state
+
+	@frappe.whitelist()
+	def disconnect_whatsapp(self) -> dict:
+		session = self.session_for_setup(create=False)
+		if not session:
+			return {"state": "Not Set Up"}
+		return session.logout()
 
 	@frappe.whitelist()
 	def test_ai(self, message: str = "Hello, are you there?") -> dict:

@@ -15,6 +15,7 @@
   "bridge_url",
   "bridge_api_token",
   "waclient_section",
+  "waclient_instance_id",
   "waclient_access_token",
   "column_break_waclient",
   "waclient_api_url",
@@ -22,8 +23,8 @@
   "default_session",
   "column_break_general",
   "request_timeout",
-  "bridge_status_section",
-  "bridge_status_html",
+  "connection_section",
+  "connection_html",
   "webhook_section",
   "webhook_url",
   "public_base_url",
@@ -190,6 +191,7 @@
   },
   {
    "default": "http://127.0.0.1:8787",
+   "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
    "description": "Where the Node bridge listens. Keep it on loopback.",
    "fieldname": "bridge_url",
    "fieldtype": "Data",
@@ -197,6 +199,7 @@
    "mandatory_depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\""
   },
   {
+   "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
    "description": "Must match BRIDGE_API_TOKEN in the bridge environment.",
    "fieldname": "bridge_api_token",
    "fieldtype": "Password",
@@ -210,6 +213,14 @@
    "label": "WaClient"
   },
   {
+   "depends_on": "eval:doc.whatsapp_provider==\"WaClient\"",
+   "description": "From your WaClient dashboard. One instance is one WhatsApp number.",
+   "fieldname": "waclient_instance_id",
+   "fieldtype": "Data",
+   "label": "Instance ID"
+  },
+  {
+   "depends_on": "eval:doc.whatsapp_provider==\"WaClient\"",
    "description": "From your WaClient dashboard.",
    "fieldname": "waclient_access_token",
    "fieldtype": "Password",
@@ -222,6 +233,7 @@
   },
   {
    "default": "https://api.waclient.com",
+   "depends_on": "eval:doc.whatsapp_provider==\"WaClient\"",
    "description": "Leave as is unless WaClient tells you otherwise.",
    "fieldname": "waclient_api_url",
    "fieldtype": "Data",
@@ -249,14 +261,14 @@
    "label": "Request Timeout (seconds)"
   },
   {
-   "fieldname": "bridge_status_section",
+   "fieldname": "connection_section",
    "fieldtype": "Section Break",
-   "label": "Status"
+   "label": "WhatsApp Connection"
   },
   {
-   "fieldname": "bridge_status_html",
+   "fieldname": "connection_html",
    "fieldtype": "HTML",
-   "label": "Bridge Status"
+   "label": "Connection"
   },
   {
    "fieldname": "webhook_section",

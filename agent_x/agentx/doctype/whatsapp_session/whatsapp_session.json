@@ -52,7 +52,7 @@
   },
   {
    "depends_on": "eval:doc.provider==\"WaClient\"",
-   "description": "From your WaClient dashboard. Each instance is one WhatsApp number.",
+   "description": "Leave empty to use the Instance ID from AgentX Settings. Set it only when this session is a different number.",
    "fieldname": "instance_id",
    "fieldtype": "Data",
    "label": "WaClient Instance ID"

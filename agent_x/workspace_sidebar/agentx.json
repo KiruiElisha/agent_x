@@ -3,13 +3,13 @@
  "creation": "2026-08-23 00:00:00.000000",
  "docstatus": 0,
  "doctype": "Workspace Sidebar",
- "header_icon": "message",
+ "header_icon": "message-circle",
  "idx": 0,
  "items": [
   {
    "child": 0,
-   "collapsible": 0,
-   "icon": "home",
+   "collapsible": 1,
+   "icon": "house",
    "indent": 0,
    "keep_closed": 0,
    "label": "Home",
@@ -21,17 +21,18 @@
   {
    "child": 0,
    "collapsible": 1,
-   "icon": "comment",
-   "indent": 0,
+   "icon": "messages-square",
+   "indent": 1,
    "keep_closed": 0,
    "label": "Conversations",
-   "show_arrow": 1,
-   "type": "Sidebar Item Group"
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Section Break"
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "message",
+   "collapsible": 1,
+   "icon": "message-square",
    "indent": 1,
    "keep_closed": 0,
    "label": "Messages",
@@ -42,8 +43,8 @@
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "customer",
+   "collapsible": 1,
+   "icon": "contact",
    "indent": 1,
    "keep_closed": 0,
    "label": "Contacts",
@@ -54,8 +55,8 @@
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "comment",
+   "collapsible": 1,
+   "icon": "message-circle",
    "indent": 1,
    "keep_closed": 0,
    "label": "Conversations",
@@ -67,17 +68,18 @@
   {
    "child": 0,
    "collapsible": 1,
-   "icon": "tool",
-   "indent": 0,
+   "icon": "workflow",
+   "indent": 1,
    "keep_closed": 0,
    "label": "Automation",
-   "show_arrow": 1,
-   "type": "Sidebar Item Group"
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Section Break"
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "notification",
+   "collapsible": 1,
+   "icon": "bell",
    "indent": 1,
    "keep_closed": 0,
    "label": "Alerts",
@@ -88,8 +90,8 @@
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "permission",
+   "collapsible": 1,
+   "icon": "shield-check",
    "indent": 1,
    "keep_closed": 0,
    "label": "Pending Approvals",
@@ -100,8 +102,8 @@
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "list-alt",
+   "collapsible": 1,
+   "icon": "history",
    "indent": 1,
    "keep_closed": 0,
    "label": "Agent Runs",
@@ -112,8 +114,8 @@
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "edit",
+   "collapsible": 1,
+   "icon": "pencil",
    "indent": 1,
    "keep_closed": 0,
    "label": "Corrections",
@@ -125,17 +127,18 @@
   {
    "child": 0,
    "collapsible": 1,
-   "icon": "setting-gear",
-   "indent": 0,
+   "icon": "settings",
+   "indent": 1,
    "keep_closed": 0,
    "label": "Setup",
-   "show_arrow": 1,
-   "type": "Sidebar Item Group"
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Section Break"
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "setting-gear",
+   "collapsible": 1,
+   "icon": "settings",
    "indent": 1,
    "keep_closed": 0,
    "label": "Settings",
@@ -146,8 +149,8 @@
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "integration",
+   "collapsible": 1,
+   "icon": "qr-code",
    "indent": 1,
    "keep_closed": 0,
    "label": "Sessions",
@@ -158,8 +161,8 @@
   },
   {
    "child": 1,
-   "collapsible": 0,
-   "icon": "education",
+   "collapsible": 1,
+   "icon": "book-open",
    "indent": 1,
    "keep_closed": 0,
    "label": "Knowledge",
@@ -169,7 +172,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-08-24 00:00:00.000000",
+ "modified": "2026-08-24 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX",

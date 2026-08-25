@@ -1246,5 +1246,161 @@ class TestCorrectionFormatting(unittest.TestCase):
 		self.assertIn("2. When: b", text)
 
 
+# --------------------------------------------------------------------------
+# WaClient webhook payloads.
+#
+# REAL_MESSAGE below is copied verbatim from a production Error Log. Everything
+# here failed silently before: the message arrived, no envelope was found, and
+# it was dropped as "no sender" with nothing written to the log to say so.
+# --------------------------------------------------------------------------
+
+from agent_x.core import payload as wa_payload  # noqa: E402
+
+REAL_MESSAGE = {
+	"cmd": "agent_x.core.webhook.receive",
+	"data": {
+		"data": [
+			{
+				"conversationTimestamp": 1787633143,
+				"id": "254113456822@s.whatsapp.net",
+				"messages": [
+					{
+						"message": {
+							"broadcast": False,
+							"key": {
+								"addressingMode": "lid",
+								"fromMe": False,
+								"id": "A5B71CDE9884CBFB23901E66AF761AB8",
+								"participant": "",
+								"remoteJid": "73143813197829@lid",
+								"remoteJidAlt": "254113456822@s.whatsapp.net",
+							},
+							"message": {
+								"conversation": "Hello",
+								"messageContextInfo": {
+									"deviceListMetadataVersion": 2,
+									"messageSecret": "EpMsWFEiGKmJd4XhdLTjtFjmd3qWnB3TECfP8Ts1BVQ=",
+								},
+							},
+							"messageTimestamp": 1787633143,
+							"pushName": "Ronoh",
+							"verifiedBizName": "Ronoh",
+						}
+					}
+				],
+				"unreadCount": 1,
+			}
+		],
+		"event": "chats.update",
+	},
+	"instance_id": "6A3B2A60E842E",
+}
+
+
+def upsert(text="Yo", remote="254113456822@s.whatsapp.net", **key):
+	k = {"remoteJid": remote, "id": "M1", "fromMe": False}
+	k.update(key)
+	return {
+		"data": {"event": "messages.upsert",
+		         "messages": [{"key": k, "message": {"conversation": text}, "pushName": "R"}]},
+		"instance_id": "I",
+	}
+
+
+class TestRealWaClientMessage(unittest.TestCase):
+	def setUp(self):
+		self.parsed = wa_payload.parse(REAL_MESSAGE)
+
+	def test_the_message_is_found_at_all(self):
+		# It sits at data.data[0].messages[0].message, which no fixed path caught.
+		self.assertIsNotNone(self.parsed, "the real payload must parse")
+
+	def test_the_text_is_read(self):
+		self.assertEqual(self.parsed["text"], "Hello")
+
+	def test_the_sender_is_the_phone_number_not_the_lid(self):
+		# remoteJid is an opaque @lid; the number lives in remoteJidAlt. Using
+		# the lid means the sender never matches an allowed number.
+		self.assertEqual(self.parsed["wa_id"], "254113456822")
+		self.assertNotIn("lid", self.parsed["chat_id"])
+
+	def test_an_allowed_number_actually_matches(self):
+		from agent_x.core.phone import same_number
+
+		self.assertTrue(same_number("254113456822", self.parsed["wa_id"]))
+		self.assertFalse(same_number("254113456822", "73143813197829"))
+
+	def test_identifiers_survive(self):
+		self.assertEqual(self.parsed["message_id"], "A5B71CDE9884CBFB23901E66AF761AB8")
+		self.assertEqual(self.parsed["instance_id"], "6A3B2A60E842E")
+		self.assertEqual(self.parsed["push_name"], "Ronoh")
+
+	def test_it_is_a_direct_chat_from_someone_else(self):
+		self.assertFalse(self.parsed["is_group"])
+		self.assertFalse(self.parsed["from_me"])
+
+	def test_the_timestamp_is_kept(self):
+		self.assertEqual(self.parsed["timestamp"], 1787633143)
+
+
+class TestPayloadShapes(unittest.TestCase):
+	def test_the_flat_upsert_shape_still_works(self):
+		parsed = wa_payload.parse(upsert("Yo"))
+		self.assertEqual(parsed["text"], "Yo")
+		self.assertEqual(parsed["wa_id"], "254113456822")
+
+	def test_an_event_with_no_readable_content_is_ignored(self):
+		empty = {"data": {"event": "chats.update", "data": [{"id": "254@s.whatsapp.net",
+			"messages": [{"message": {"key": {"remoteJid": "7@lid",
+			"remoteJidAlt": "254113456822@s.whatsapp.net", "id": "M", "fromMe": False},
+			"message": {}}}]}]}, "instance_id": "I"}
+		# Otherwise the assistant answers silence.
+		self.assertIsNone(wa_payload.parse(empty))
+
+	def test_presence_updates_are_ignored(self):
+		noise = {"data": {"event": "presence.update", "data": [{"id": "254@s.whatsapp.net"}]},
+		         "instance_id": "I"}
+		self.assertIsNone(wa_payload.parse(noise))
+
+	def test_a_receipt_may_arrive_without_content(self):
+		ack = {"data": {"event": "messages.ack", "status": 3,
+			"messages": [{"key": {"remoteJid": "254113456822@s.whatsapp.net", "id": "M4",
+			"fromMe": True}, "message": {}}]}, "instance_id": "I"}
+		parsed = wa_payload.parse(ack)
+		self.assertIsNotNone(parsed)
+		self.assertTrue(wa_payload.is_status_event(parsed))
+
+	def test_chats_update_is_not_mistaken_for_a_receipt(self):
+		# "chats.update" contains "update" but carries real messages.
+		self.assertFalse(wa_payload.is_status_event(wa_payload.parse(REAL_MESSAGE)))
+
+	def test_a_group_keeps_the_group_and_the_real_participant(self):
+		grp = {"data": {"event": "messages.upsert", "messages": [{"key": {
+			"remoteJid": "120363000@g.us", "participant": "999@lid",
+			"participantAlt": "254700111222@s.whatsapp.net", "id": "G1", "fromMe": False},
+			"message": {"conversation": "team msg"}, "pushName": "X"}]}, "instance_id": "I"}
+		parsed = wa_payload.parse(grp)
+		self.assertTrue(parsed["is_group"])
+		self.assertEqual(parsed["chat_id"], "120363000@g.us")
+		self.assertEqual(parsed["wa_id"], "254700111222")
+
+	def test_our_own_echo_is_flagged(self):
+		parsed = wa_payload.parse(upsert("mine", fromMe=True))
+		self.assertTrue(parsed["from_me"])
+
+	def test_media_is_recognised(self):
+		media = {"data": {"event": "messages.upsert", "messages": [{"key": {
+			"remoteJid": "254113456822@s.whatsapp.net", "id": "I1", "fromMe": False},
+			"message": {"imageMessage": {"caption": "look", "mimetype": "image/jpeg",
+			"fileName": "p.jpg"}}, "pushName": "R"}]}, "instance_id": "I"}
+		parsed = wa_payload.parse(media)
+		self.assertEqual(parsed["message_type"], "image")
+		self.assertEqual(parsed["text"], "look")
+
+	def test_nonsense_does_not_raise(self):
+		for junk in ({}, {"data": {}}, {"data": []}, {"a": {"b": {"c": 1}}}):
+			self.assertIsNone(wa_payload.parse(junk))
+
+
 if __name__ == "__main__":
 	unittest.main(verbosity=2)

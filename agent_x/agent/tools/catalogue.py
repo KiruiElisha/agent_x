@@ -258,3 +258,162 @@ def guard(ctx) -> None:
 		frappe.throw(_("The item catalogue is switched off in AgentX Settings."))
 
 	policy.check(ctx.settings, "Item", "read", ctx.acting_user).raise_if_denied()
+
+
+# ---------------------------------------------------------------- matching
+#
+# A customer's list never uses your item codes. It says "andolex rinse 200ml"
+# where the system says "ANDOLEX -C ORAL RINSE 200ML". Matching has to happen
+# against the database, because a code the model invents will fail on save and,
+# worse, might match the wrong product.
+
+import re
+from difflib import SequenceMatcher
+
+# Words that carry no distinguishing weight in a product name.
+NOISE = {"the", "a", "of", "and", "for", "with", "pack", "pcs", "pc", "box", "bottle"}
+
+# Below this nothing is offered at all. Set well clear of the noise: unrelated
+# wording scores around 0.15 to 0.45 against a big catalogue, and offering one
+# of those as a maybe invites the wrong product onto an order.
+FLOOR = 0.60
+# At or above this a single match is treated as certain enough to propose.
+CONFIDENT = 0.82
+
+
+def normalise_name(text: str) -> str:
+	text = re.sub(r"[^a-z0-9\s.]", " ", str(text or "").lower())
+	return " ".join(text.split())
+
+
+def tokens(text: str) -> list[str]:
+	return [t for t in normalise_name(text).split() if t and t not in NOISE]
+
+
+def score(query: str, candidate: str) -> float:
+	"""How well a customer's wording matches a real item name.
+
+	Combines whole-string similarity with token overlap, because a customer
+	writes fewer words than the catalogue does and pure string similarity
+	punishes that unfairly.
+	"""
+	a, b = normalise_name(query), normalise_name(candidate)
+	if not a or not b:
+		return 0.0
+
+	if a == b:
+		return 1.0
+
+	ratio = SequenceMatcher(None, a, b).ratio()
+
+	qt, ct = set(tokens(query)), set(tokens(candidate))
+	overlap = len(qt & ct) / len(qt) if qt else 0.0
+
+	# A size or strength that appears in both is a strong signal.
+	numbers = {t for t in qt if any(c.isdigit() for c in t)}
+	if numbers and numbers <= ct:
+		overlap = min(1.0, overlap + 0.15)
+
+	return max(ratio, (ratio + overlap * 2) / 3)
+
+
+def candidates_for(ctx, query: str, settings, limit: int = 60) -> list[dict]:
+	"""A shortlist from the database to score locally."""
+	from agent_x.agentx.doctype.agent_action.agent_action import switch_user
+
+	filters = base_filters(settings)
+	words = [t for t in tokens(query) if len(t) > 2][:4]
+
+	rows, seen = [], set()
+
+	with switch_user(ctx.acting_user):
+		for word in words or [query]:
+			term = f"%{word}%"
+			found = frappe.get_all(
+				"Item",
+				filters=filters,
+				or_filters={"item_code": ("like", term), "item_name": ("like", term)},
+				fields=list(ITEM_FIELDS),
+				limit=limit,
+			)
+			for row in found:
+				if row["item_code"] not in seen:
+					seen.add(row["item_code"])
+					rows.append(row)
+
+	# No fallback to an arbitrary slice of the catalogue. Scoring random items
+	# against wording that matched nothing produces a plausible-looking match
+	# for a product the customer never mentioned.
+	return rows
+
+
+def match_items(ctx, requests: list | str, limit_per_line: int = 3) -> dict:
+	"""Resolve a customer's wording to real items.
+
+	Each line comes back with its best matches and a confidence, so the model
+	can place the certain ones and ask about the rest instead of guessing.
+	"""
+	guard(ctx)
+
+	if isinstance(requests, str):
+		requests = frappe.parse_json(requests)
+
+	if not isinstance(requests, list) or not requests:
+		frappe.throw(_("Give a list of the items to look up."))
+
+	settings = ctx.settings
+	results = []
+
+	for entry in requests[:40]:
+		if isinstance(entry, str):
+			entry = {"name": entry}
+		if not isinstance(entry, dict):
+			continue
+
+		wanted = str(entry.get("name") or entry.get("item") or entry.get("description") or "").strip()
+		if not wanted:
+			continue
+
+		qty = entry.get("qty") or entry.get("quantity")
+
+		scored = sorted(
+			(
+				{**row, "_score": score(wanted, f"{row.get('item_name') or ''} {row.get('item_code') or ''}")}
+				for row in candidates_for(ctx, wanted, settings)
+			),
+			key=lambda r: r["_score"],
+			reverse=True,
+		)
+		shortlist = [r for r in scored if r["_score"] >= FLOOR][:limit_per_line]
+
+		options = decorate(ctx, shortlist, settings)
+		for option, row in zip(options, shortlist):
+			option["confidence"] = round(row["_score"], 2)
+
+		best = options[0] if options else None
+		results.append(
+			{
+				"asked_for": wanted,
+				"qty": qty,
+				"status": "matched"
+				if best and best["confidence"] >= CONFIDENT
+				else ("uncertain" if options else "not_found"),
+				"options": options,
+			}
+		)
+
+	matched = [r for r in results if r["status"] == "matched"]
+	unsure = [r for r in results if r["status"] == "uncertain"]
+	missing = [r for r in results if r["status"] == "not_found"]
+
+	return {
+		"lines": results,
+		"matched": len(matched),
+		"uncertain": len(unsure),
+		"not_found": len(missing),
+		"note": _(
+			"Use the item_code from a matched line as it is. For an uncertain line, ask the "
+			"customer which option they meant. For a line that was not found, say so plainly "
+			"rather than substituting something else."
+		),
+	}

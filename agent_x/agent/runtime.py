@@ -166,8 +166,26 @@ def done_message(action, name: str | None) -> str:
 	return _(template).format(action.document_type, name or "")
 
 
+# Words that turn an apparent yes into something else: a condition, a change of
+# mind, or an instruction to do it differently. "Yes but only if..." is not
+# consent to what was described.
+QUALIFIERS = {
+	"but", "however", "if", "unless", "except", "though", "although",
+	"instead", "rather", "change", "changed", "different", "differently",
+	"only", "actually", "wait", "hold", "first", "before", "dont", "don't", "not",
+}
+
+
 def normalise_answer(text: str) -> str:
-	cleaned = re.sub(r"[^\w\s']", "", (text or "").strip().lower())
+	"""Read a yes or a no, and treat anything else as neither.
+
+	A change is about to be written, so the bar is deliberately high: the reply
+	has to open with an affirmative and add no conditions to it. "Yes just place
+	the order" passes. "Yes but only if it is under 5000" does not, because the
+	person is describing a different order from the one they were shown.
+	"""
+	cleaned = re.sub(r"[^\w\s']", " ", (text or "").strip().lower())
+	cleaned = " ".join(cleaned.split())
 	if not cleaned:
 		return "unclear"
 
@@ -176,15 +194,31 @@ def normalise_answer(text: str) -> str:
 	if cleaned in NO:
 		return "no"
 
-	# Allow a short sentence like "yes please" but not a paragraph containing "no".
 	words = cleaned.split()
-	if len(words) <= 3:
-		if words[0] in YES:
-			return "yes"
-		if words[0] in NO:
+
+	# A multi word phrase such as "go ahead" or "do it".
+	for size in (3, 2):
+		phrase = " ".join(words[:size])
+		if phrase in YES:
+			return "yes" if not qualified(words[size:]) else "unclear"
+		if phrase in NO:
 			return "no"
 
+	first = words[0]
+
+	if first in NO:
+		return "no"
+
+	if first in YES:
+		# Extra words are fine as long as they do not change the request.
+		return "unclear" if qualified(words[1:]) else "yes"
+
 	return "unclear"
+
+
+def qualified(rest: list[str]) -> bool:
+	"""Whether what follows an affirmative changes what was agreed to."""
+	return any(word in QUALIFIERS for word in rest)
 
 
 def clear_pending(conversation) -> None:
@@ -225,6 +259,9 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 		}
 	)
 	run.insert(ignore_permissions=True)
+	# Commit now, so a tool that rolls back later cannot erase the record of
+	# what was attempted.
+	frappe.db.commit()
 
 	ctx = ToolContext(settings, user, contact, conversation, run)
 	tools = registry.build_schemas(settings) if settings.automation_enabled else []
@@ -291,30 +328,39 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 		else:
 			reply_text = ""
 
-	except Exception as exc:
-		run.db_set(
+	except Exception:
+		traceback = frappe.get_traceback()
+
+		# A tool that failed may have rolled the transaction back, taking this
+		# run row with it. Recording why must not be what finally breaks.
+		safe_set(
+			run,
 			{
 				"status": "Failed",
-				"error": frappe.get_traceback()[:4000],
+				"error": traceback[:4000],
 				"tool_calls": frappe.as_json(trace),
 				"steps": len(trace),
 				"duration_ms": elapsed(started),
 			},
-			update_modified=False,
 		)
-		frappe.log_error(frappe.get_traceback(), "AgentX: agent run failed")
+		frappe.log_error(f"{traceback}\n\nAgent Run: {run.name}", "AgentX: agent run failed")
 
 		fallback = (settings.fallback_reply or "").strip()
 		return AgentResult(fallback or _("Sorry, something went wrong on my side. A person will get back to you."), run.name)
 
-	if pending_action:
+	# Handing over and asking for a confirmation both own the conversation
+	# status, and the model can do both in one turn. Escalation wins: once a
+	# person is involved they decide what happens to the pending change, and
+	# asking the customer to confirm something a human is already reviewing
+	# would be two voices again.
+	if pending_action and not handed_over:
 		park_for_confirmation(conversation, pending_action, settings)
 
 		# The model wrote the conversation, but it must not be the source of the
 		# numbers someone is agreeing to. Render those from the stored payload.
 		confirmation = confirmation_text(pending_action)
 		if confirmation:
-			run.db_set("reply", confirmation, update_modified=False)
+			safe_set(run, {"reply": confirmation})
 			conversation.db_set("last_message_on", now_datetime(), update_modified=False)
 			return AgentResult(confirmation, run.name, pending=pending_action)
 
@@ -330,7 +376,8 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 
 	reply_text = clamp(reply_text, settings.max_reply_characters or 1500)
 
-	run.db_set(
+	safe_set(
+		run,
 		{
 			"status": "Completed",
 			"reply": reply_text,
@@ -345,7 +392,6 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 			if hits
 			else None,
 		},
-		update_modified=False,
 	)
 
 	conversation.db_set("last_message_on", now_datetime(), update_modified=False)
@@ -373,6 +419,20 @@ def load_corrections(settings) -> list[dict]:
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "AgentX: could not load corrections")
 		return []
+
+
+def safe_set(doc, values: dict) -> None:
+	"""Write to a document without letting the write become the failure.
+
+	A tool that rolled the transaction back can leave this row gone. Losing the
+	audit trail is bad; losing the reply because we could not write the audit
+	trail is worse.
+	"""
+	try:
+		doc.db_set(values, update_modified=False)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "AgentX: could not update the agent run")
 
 
 def confirmation_text(action_name: str) -> str | None:
@@ -422,9 +482,29 @@ def user_turn(inbound: dict, settings) -> dict:
 
 	turn = {"role": "user", "text": body}
 
-	image = inbound.get("image")
-	if image and settings.ai_read_images and kind in ("image", "sticker"):
-		turn["image"] = image
+	attachment = inbound.get("attachment") or {}
+	kind_of_file = attachment.get("kind")
+
+	if kind_of_file in ("image", "document") and attachment.get("data"):
+		# Gemini takes both through the same inline part.
+		turn[kind_of_file] = {
+			"mime_type": attachment["mime_type"],
+			"data": attachment["data"],
+		}
+		turn["text"] += (
+			"\n[The file is attached. Read it. If it lists items to order, pull out each "
+			"line with its quantity and look the codes up with match_items.]"
+		)
+	elif kind_of_file == "unreadable":
+		turn["text"] += (
+			f"\n[This is {attachment.get('label', 'a file')}, which you cannot open. "
+			"Ask them to send it as a PDF or a photo instead.]"
+		)
+	elif kind_of_file in ("too_large", "unavailable"):
+		turn["text"] += (
+			"\n[The file could not be downloaded, possibly because it is too large. "
+			"Ask them to send a smaller one or type the list out.]"
+		)
 
 	return turn
 

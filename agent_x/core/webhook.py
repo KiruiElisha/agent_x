@@ -249,7 +249,19 @@ def ingest(settings, **event) -> dict:
 	# agent, the log, the history — treats it as if they had typed it.
 	transcribe_if_voice(settings, event)
 
-	log_name = log_incoming(settings, contact, event)
+	# A photo or PDF has to reach the model as a file. Describing it in words
+	# is useless for reading an order off a stock list.
+	attach_media(settings, event)
+
+	log_name, first_time = log_incoming(settings, contact, event)
+
+	# Providers send more than one event for a single message: WaClient emits
+	# both a chats.update and a messages.upsert. Logging it twice is untidy;
+	# answering it twice is worse, and two agents racing on one conversation is
+	# what produced the "something went wrong" replies.
+	if not first_time:
+		return {"status": "ok", "message": log_name, "replied": False, "reason": "already handled"}
+
 	bump_counter(event.get("session"))
 	frappe.db.commit()
 
@@ -316,6 +328,19 @@ def transcribe_if_voice(settings, event: dict) -> None:
 		event["transcription_failed"] = True
 
 
+def attach_media(settings, event: dict) -> None:
+	"""Prepare an image or document so the model can actually read it."""
+	from agent_x.agent import audio, media
+
+	blob = event.get("media") or {}
+	if not blob or audio.is_voice(event.get("message_type"), blob):
+		return
+
+	prepared = media.prepare(blob, settings)
+	if prepared:
+		event["attachment"] = prepared
+
+
 def should_skip(contact, settings, is_group: bool) -> str | None:
 	"""Why this message gets no automated reply, or None to go ahead."""
 	if is_group and not settings.reply_to_groups:
@@ -347,6 +372,7 @@ def run_agent(settings, contact, event: dict, log_name: str | None):
 		"wa_id": contact.wa_id,
 		"transcribed": event.get("transcribed"),
 		"transcription_failed": event.get("transcription_failed"),
+		"attachment": event.get("attachment"),
 	}
 
 	try:
@@ -374,19 +400,27 @@ def deliver(text: str, contact, settings, session: str | None, run: str | None =
 		return None
 
 
-def log_incoming(settings, contact, event: dict) -> str | None:
+def log_incoming(settings, contact, event: dict) -> tuple[str | None, bool]:
+	"""Store the message. Returns its name and whether this is the first sighting.
+
+	The uniqueness of message_id is enforced by the database, not by the check
+	below. Two webhooks arriving together can both pass an exists() check, so
+	the insert is what actually decides, and a duplicate comes back as an
+	integrity error rather than a second row.
+	"""
 	if not settings.log_messages:
-		return None
+		return None, True
 
 	message_id = event.get("message_id")
 
-	# Providers retry, so the same message can arrive twice.
+	# Cheap path: almost every duplicate is caught here without hitting the
+	# integrity error below.
 	if message_id:
 		existing = frappe.db.get_value(
 			"WhatsApp Message", {"message_id": message_id, "direction": "Incoming"}, "name"
 		)
 		if existing:
-			return existing
+			return existing, False
 
 	media = event.get("media") or {}
 
@@ -411,8 +445,16 @@ def log_incoming(settings, contact, event: dict) -> str | None:
 			"raw_payload": frappe.as_json(event.get("raw")) if settings.store_raw_payload else None,
 		}
 	)
-	doc.insert(ignore_permissions=True)
-	return doc.name
+	try:
+		doc.insert(ignore_permissions=True)
+	except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
+		# Another request logged it first. Frappe raises either depending on
+		# whether its own validation or the database index caught it.
+		frappe.db.rollback()
+		existing = frappe.db.get_value("WhatsApp Message", {"message_id": message_id}, "name")
+		return existing, False
+
+	return doc.name, True
 
 
 def to_datetime(value):

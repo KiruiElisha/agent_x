@@ -52,6 +52,8 @@
   "column_break_tuning",
   "max_tool_iterations",
   "max_reply_characters",
+  "read_documents",
+  "max_document_mb",
   "audio_section",
   "transcribe_voice_notes",
   "column_break_audio",
@@ -427,6 +429,20 @@
    "fieldname": "max_reply_characters",
    "fieldtype": "Int",
    "label": "Max Reply Characters"
+  },
+  {
+   "default": "1",
+   "description": "Customers can send a photo or PDF of what they want and the assistant reads the items off it. Gemini only.",
+   "fieldname": "read_documents",
+   "fieldtype": "Check",
+   "label": "Read Documents and Photos"
+  },
+  {
+   "default": "10",
+   "depends_on": "read_documents",
+   "fieldname": "max_document_mb",
+   "fieldtype": "Int",
+   "label": "Max Document Size (MB)"
   },
   {
    "fieldname": "audio_section",
@@ -1013,7 +1029,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-24 15:00:00.000000",
+ "modified": "2026-08-25 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Settings",

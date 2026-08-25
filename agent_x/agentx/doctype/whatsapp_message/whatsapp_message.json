@@ -165,12 +165,13 @@
    "label": "Delivery"
   },
   {
+   "description": "The provider's own id. Unique, so the same message can never be logged twice.",
    "fieldname": "message_id",
    "fieldtype": "Data",
    "label": "Provider Message ID",
    "no_copy": 1,
    "read_only": 1,
-   "search_index": 1
+   "unique": 1
   },
   {
    "fieldname": "sent_on",
@@ -239,7 +240,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-25 09:00:00.000000",
+ "modified": "2026-08-25 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "WhatsApp Message",

@@ -2,6 +2,7 @@
 # Runs before doctypes sync, so a broken sidebar cannot block the desk while
 # the rest of the migration proceeds.
 agent_x.patches.repair_sidebar_items
+agent_x.patches.dedupe_messages
 
 [post_model_sync]
 agent_x.patches.seed_defaults

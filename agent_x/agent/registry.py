@@ -11,7 +11,7 @@ import frappe
 from frappe import _
 
 from agent_x.agent import policy
-from agent_x.agent.tools import catalogue, documents
+from agent_x.agent.tools import catalogue, customers, documents
 
 # Operation each tool needs, used to decide whether to advertise it at all.
 def handover_tool(ctx, reason: str | None = None) -> dict:
@@ -42,6 +42,10 @@ TOOL_OPERATIONS = {
 	"list_item_groups": "read",
 	"find_doctypes": "read",
 	"hand_over": None,
+	"match_items": "read",
+	"find_customer": "read",
+	"link_customer": "read",
+	"create_customer": "create",
 }
 
 HANDLERS = {
@@ -60,6 +64,10 @@ HANDLERS = {
 	"list_item_groups": catalogue.list_item_groups,
 	"find_doctypes": documents.find_doctypes,
 	"hand_over": handover_tool,
+	"match_items": catalogue.match_items,
+	"find_customer": customers.find_customer,
+	"link_customer": customers.link_customer,
+	"create_customer": customers.create_customer,
 }
 
 
@@ -196,6 +204,34 @@ def build_schemas(settings) -> list[dict]:
 				},
 			}
 		)
+
+	if catalogue_enabled(settings, permitted):
+		schemas.append(
+			{
+				"name": "match_items",
+				"description": (
+					"Turn a customer's wording into real item codes. Give it the lines you read "
+					"from their message, photo, or document. Never write an item code you did "
+					"not get from here or from find_items."
+				),
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"requests": {
+							"type": "string",
+							"description": (
+								'A JSON list of what they asked for, e.g. '
+								'[{"name": "andolex rinse 200ml", "qty": 5}, {"name": "panadol", "qty": 2}]'
+							),
+						}
+					},
+					"required": ["requests"],
+				},
+			}
+		)
+
+	if customers_enabled(settings, permitted):
+		schemas.extend(customer_schemas(permitted))
 
 	if settings.allow_document_pdfs:
 		schemas.append(
@@ -377,6 +413,74 @@ def catalogue_schemas() -> list[dict]:
 			"parameters": {"type": "object", "properties": {}},
 		},
 	]
+
+
+def customers_enabled(settings, permitted: dict) -> bool:
+	return "Customer" in permitted.get("read", set()) and bool(
+		frappe.db.exists("DocType", "Customer")
+	)
+
+
+def customer_schemas(permitted: dict) -> list[dict]:
+	"""Working out who the conversation is for.
+
+	Separate from the generic document tools because getting this wrong bills
+	the wrong company, so the search is deliberate rather than a plain lookup.
+	"""
+	schemas = [
+		{
+			"name": "find_customer",
+			"description": (
+				"Work out which customer this conversation is for. Call it with no query "
+				"first: it checks whether this number is already linked, then searches every "
+				"place a phone number is stored. Only pass a query when the customer tells "
+				"you their name or company. Always do this before creating an order."
+			),
+			"parameters": {
+				"type": "object",
+				"properties": {
+					"query": {
+						"type": "string",
+						"description": "Their name or company, only if they told you.",
+					}
+				},
+			},
+		},
+		{
+			"name": "link_customer",
+			"description": (
+				"Remember that this number belongs to a customer, once they have confirmed "
+				"it. Future conversations then skip the question."
+			),
+			"parameters": {
+				"type": "object",
+				"properties": {"customer": {"type": "string", "description": "The exact customer name."}},
+				"required": ["customer"],
+			},
+		},
+	]
+
+	if "Customer" in permitted.get("create", set()):
+		schemas.append(
+			{
+				"name": "create_customer",
+				"description": (
+					"Create a new customer, only after asking them and them saying yes. Never "
+					"create one to get past a failed lookup."
+				),
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"customer_name": {"type": "string", "description": "Their name or company."},
+						"customer_group": {"type": "string"},
+						"territory": {"type": "string"},
+					},
+					"required": ["customer_name"],
+				},
+			}
+		)
+
+	return schemas
 
 
 def permitted_operations(settings) -> dict[str, set[str]]:

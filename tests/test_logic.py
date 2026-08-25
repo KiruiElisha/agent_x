@@ -140,12 +140,20 @@ class TestConfirmation(unittest.TestCase):
 	def test_a_question_is_not_consent(self):
 		self.assertEqual(runtime.normalise_answer("what does that mean?"), "unclear")
 
+	def test_a_plain_instruction_after_yes_is_still_consent(self):
+		# Real people do not reply with a bare "yes"; refusing these made the
+		# assistant ask the same question over and over.
+		for text in ("Yes just place the order", "yes place the order", "ok place it",
+		             "yes, place the order please", "yeah do it"):
+			self.assertEqual(runtime.normalise_answer(text), "yes", text)
+
 	def test_conditional_agreement_is_not_consent(self):
-		# The dangerous case: it starts with "yes" but changes the request.
-		self.assertEqual(
-			runtime.normalise_answer("yes but only if the total is under 5000 and change the address"),
-			"unclear",
-		)
+		# The dangerous case: it opens with "yes" but describes a different order.
+		for text in ("yes but only if the total is under 5000 and change the address",
+		             "yes but change the quantity", "yes if the price is right",
+		             "yes actually make it 10", "yes instead send 3",
+		             "yes but not the third item"):
+			self.assertEqual(runtime.normalise_answer(text), "unclear", text)
 
 	def test_a_sentence_containing_no_is_not_a_refusal(self):
 		self.assertEqual(
@@ -1400,6 +1408,130 @@ class TestPayloadShapes(unittest.TestCase):
 	def test_nonsense_does_not_raise(self):
 		for junk in ({}, {"data": {}}, {"data": []}, {"a": {"b": {"c": 1}}}):
 			self.assertIsNone(wa_payload.parse(junk))
+
+
+class TestDuplicateDelivery(unittest.TestCase):
+	"""WaClient sends more than one event per message.
+
+	Logging it twice is untidy. Answering it twice, with two agents racing on
+	one conversation, is what produced the "something went wrong" replies.
+	"""
+
+	def test_the_same_id_arrives_under_different_event_names(self):
+		chats = wa_payload.parse(REAL_MESSAGE)
+		upserted = wa_payload.parse(
+			upsert("Hello", remote="73143813197829@lid",
+			       remoteJidAlt="254113456822@s.whatsapp.net",
+			       id="A5B71CDE9884CBFB23901E66AF761AB8")
+		)
+		# Same message, two events. The id is what identifies it.
+		self.assertEqual(chats["message_id"], upserted["message_id"])
+		self.assertEqual(chats["wa_id"], upserted["wa_id"])
+		self.assertNotEqual(chats["event"], upserted["event"])
+
+
+class TestEscalationBeatsConfirmation(unittest.TestCase):
+	"""Handing over and asking for a confirmation both own the conversation status."""
+
+	def test_the_two_statuses_are_distinct(self):
+		# If both are written in one turn the later one wins, which silently
+		# undid the escalation.
+		self.assertNotEqual("Handed Over", "Awaiting Confirmation")
+
+	def test_runtime_guards_the_pending_branch(self):
+		import inspect
+
+		source = inspect.getsource(runtime.run_agent)
+		self.assertIn("if pending_action and not handed_over:", source)
+
+
+# --------------------------------------------------------------------------
+# Reading an order off a photo, a document, or a voice note.
+# --------------------------------------------------------------------------
+
+from agent_x.agent import media  # noqa: E402
+
+
+class TestItemMatching(unittest.TestCase):
+	"""A customer's list never uses your item codes."""
+
+	def test_exact_wording_scores_top(self):
+		self.assertEqual(catalogue.score("Queen Cake 10/-", "Queen Cake 10/-"), 1.0)
+
+	def test_partial_wording_still_scores_well(self):
+		# "queen cake" against "Queen Cake 10/-" is how people actually write.
+		self.assertGreater(catalogue.score("queen cake", "Queen Cake 10/-"), 0.8)
+
+	def test_unrelated_wording_scores_low(self):
+		self.assertLess(catalogue.score("completely unrelated widget", "Queen Cake 10/-"), 0.5)
+
+	def test_a_size_appearing_in_both_helps(self):
+		with_size = catalogue.score("andolex 200ml", "ANDOLEX -C ORAL RINSE 200ML")
+		wrong_size = catalogue.score("andolex 200ml", "ANDOLEX C SPRAY 30 ML")
+		self.assertGreater(with_size, wrong_size)
+
+	def test_the_floor_sits_clear_of_the_noise(self):
+		# Unrelated wording scored around 0.45 against a large catalogue, which
+		# was being offered to customers as a maybe.
+		self.assertGreaterEqual(catalogue.FLOOR, 0.55)
+		self.assertLess(catalogue.FLOOR, catalogue.CONFIDENT)
+
+	def test_noise_words_are_ignored(self):
+		self.assertNotIn("the", catalogue.tokens("the queen cake"))
+		self.assertIn("queen", catalogue.tokens("the queen cake"))
+
+	def test_punctuation_does_not_break_matching(self):
+		self.assertEqual(catalogue.normalise_name("ANDOLEX -C, 200ML!"), "andolex c 200ml")
+
+
+class TestAttachmentHandling(unittest.TestCase):
+	def test_photos_are_recognised(self):
+		for m in ({"mimetype": "image/jpeg"}, {"filename": "list.png"}, {"filename": "IMG_1.HEIC"}):
+			self.assertEqual(media.classify(m), "image", m)
+
+	def test_pdfs_and_text_are_readable(self):
+		for m in ({"mimetype": "application/pdf"}, {"filename": "order.pdf"},
+		          {"filename": "list.csv"}, {"mimetype": "text/plain"}):
+			self.assertEqual(media.classify(m), "document", m)
+
+	def test_office_files_are_flagged_as_unreadable(self):
+		# Sending the bytes would be useless; the reply should say what to send.
+		for m in ({"filename": "order.xlsx"}, {"filename": "order.docx"}):
+			self.assertEqual(media.classify(m), "unreadable", m)
+
+	def test_nothing_attached_is_not_a_crash(self):
+		self.assertEqual(media.classify({}), "none")
+		self.assertEqual(media.classify(None), "none")
+
+	def test_codec_parameters_are_stripped_from_the_mime(self):
+		self.assertEqual(media.mime_for({"mimetype": "image/jpeg"}, "image"), "image/jpeg")
+
+	def test_mime_falls_back_to_the_extension(self):
+		self.assertEqual(media.mime_for({"filename": "a.png"}, "image"), "image/png")
+		self.assertEqual(media.mime_for({"filename": "a.pdf"}, "document"), "application/pdf")
+
+	def test_a_switched_off_reader_attaches_nothing(self):
+		class Off:
+			ai_read_images = 0
+			read_documents = 0
+			ai_max_image_mb = 4
+			max_document_mb = 10
+			request_timeout = 30
+
+		self.assertIsNone(media.prepare({"mimetype": "image/jpeg", "url": "http://x/a.jpg"}, Off()))
+
+
+class TestCustomerToolsAreRegistered(unittest.TestCase):
+	def test_finding_a_customer_only_needs_read(self):
+		self.assertEqual(registry.TOOL_OPERATIONS["find_customer"], "read")
+		self.assertEqual(registry.TOOL_OPERATIONS["link_customer"], "read")
+
+	def test_creating_one_is_a_write(self):
+		# So it goes through the policy gate and the confirmation step.
+		self.assertEqual(registry.TOOL_OPERATIONS["create_customer"], "create")
+
+	def test_matching_items_only_needs_read(self):
+		self.assertEqual(registry.TOOL_OPERATIONS["match_items"], "read")
 
 
 if __name__ == "__main__":

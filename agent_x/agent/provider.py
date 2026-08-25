@@ -172,7 +172,7 @@ def gemini_turn(turn: dict) -> dict:
 	parts = [{"text": turn.get("text") or ""}]
 
 	# Gemini takes images and audio through the same inline part.
-	for kind in ("image", "audio"):
+	for kind in ("image", "audio", "document"):
 		blob = turn.get(kind)
 		if blob:
 			parts.append({"inlineData": {"mimeType": blob["mime_type"], "data": blob["data"]}})

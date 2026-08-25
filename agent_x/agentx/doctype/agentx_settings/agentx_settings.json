@@ -108,6 +108,9 @@
   "reply_to_groups",
   "allowed_section",
   "allowed_numbers",
+  "verified_section",
+  "only_verified_customers",
+  "unverified_reply",
   "excluded_section",
   "excluded_numbers",
   "hours_section",
@@ -764,6 +767,24 @@
    "options": "AgentX Allowed Number"
   },
   {
+   "fieldname": "verified_section",
+   "fieldtype": "Section Break",
+   "label": "Known Customers Only"
+  },
+  {
+   "description": "Reply only to numbers that belong to a Customer in the system. A number already recorded against a customer is recognised automatically, so nobody has to be linked by hand first.",
+   "fieldname": "only_verified_customers",
+   "fieldtype": "Check",
+   "label": "Only Serve Verified Customers"
+  },
+  {
+   "depends_on": "only_verified_customers",
+   "description": "Sent once to a number that is not a customer. Leave empty to stay silent instead.",
+   "fieldname": "unverified_reply",
+   "fieldtype": "Small Text",
+   "label": "Reply to Everyone Else"
+  },
+  {
    "fieldname": "excluded_section",
    "fieldtype": "Section Break",
    "label": "Never Reply To"
@@ -1029,7 +1050,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-25 14:00:00.000000",
+ "modified": "2026-08-25 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Settings",

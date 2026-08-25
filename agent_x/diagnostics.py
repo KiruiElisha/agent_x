@@ -258,6 +258,46 @@ def traffic(settings) -> list:
 					)
 				)
 
+	if settings.only_verified_customers:
+		out.append(
+			check(
+				"Only Serve Verified Customers",
+				None,
+				_("On. Numbers that do not belong to a Customer get {0}.").format(
+					_("the set reply") if settings.unverified_reply else _("no reply at all")
+				),
+				_("Turn it off, or link the number to a Customer."),
+			)
+		)
+
+		if incoming:
+			senders = frappe.get_all(
+				"WhatsApp Message",
+				filters={"direction": "Incoming", "creation": (">", since)},
+				pluck="contact",
+				limit=20,
+			)
+			from agent_x.agent.tools import customers
+
+			unknown = []
+			for name in {s for s in senders if s}:
+				try:
+					contact = frappe.get_doc("WhatsApp Contact", name)
+					if not customers.resolve_for_contact(contact, auto_link=False):
+						unknown.append(name)
+				except Exception:
+					continue
+
+			if unknown:
+				out.append(
+					check(
+						"Recent senders are known customers",
+						False,
+						_("Not linked to a Customer: {0}").format(", ".join(sorted(unknown)[:5])),
+						_("Link them to a Customer, or turn off Only Serve Verified Customers."),
+					)
+				)
+
 	if settings.require_user_mapping:
 		unmapped = [r.phone_number for r in settings.allowed_numbers if not r.user]
 		if unmapped:

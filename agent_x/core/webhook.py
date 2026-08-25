@@ -267,6 +267,8 @@ def ingest(settings, **event) -> dict:
 
 	skip = should_skip(contact, settings, is_group)
 	if skip:
+		if skip == "not a known customer":
+			notify_unverified(contact, settings, event)
 		return {"status": "ok", "message": log_name, "replied": False, "reason": skip}
 
 	# The agent can take several seconds. Acknowledge the message first so the
@@ -355,7 +357,46 @@ def should_skip(contact, settings, is_group: bool) -> str | None:
 		return "not an allowed number"
 	if not settings.ai_enabled:
 		return "AI assistant is off"
+	if not is_verified_customer(contact, settings):
+		return "not a known customer"
 	return None
+
+
+def is_verified_customer(contact, settings) -> bool:
+	"""Whether this number belongs to a customer, when that is required."""
+	if not settings.only_verified_customers:
+		return True
+
+	try:
+		from agent_x.agent.tools import customers
+
+		return customers.is_verified(contact)
+	except Exception:
+		# A lookup that fails must not silently lock everyone out.
+		frappe.log_error(frappe.get_traceback(), "AgentX: customer verification failed")
+		return True
+
+
+def notify_unverified(contact, settings, event: dict) -> None:
+	"""Tell a stranger why nothing is happening, once.
+
+	Silence reads as a broken number. Repeating it on every message reads as a
+	bot arguing, so it is sent only the first time we hear from them.
+	"""
+	text = (settings.unverified_reply or "").strip()
+	if not text:
+		return
+
+	# Keyed on how many times they have written in, not on whether a previous
+	# notice was delivered. Counting our own sent messages would mean a send
+	# that failed is retried on every message they ever send.
+	seen = frappe.db.count(
+		"WhatsApp Message", {"contact": contact.name, "direction": "Incoming"}
+	)
+	if seen > 1:
+		return
+
+	deliver(text, contact, settings, event.get("session"))
 
 
 def run_agent(settings, contact, event: dict, log_name: str | None):

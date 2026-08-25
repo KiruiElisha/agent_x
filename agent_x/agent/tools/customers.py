@@ -246,3 +246,48 @@ def create_customer(ctx, customer_name: str, customer_group: str | None = None,
 	return create_document(
 		ctx, "Customer", values, summary=_("Create a customer called {0}").format(name)
 	)
+
+
+# --------------------------------------------------------------- verification
+
+
+def resolve_for_contact(contact, auto_link: bool = True) -> str | None:
+	"""The customer this contact belongs to, if one can be established.
+
+	Used by the Only Serve Verified Customers gate. A real customer whose number
+	is already on file should not be turned away merely because nobody has
+	linked their WhatsApp contact yet, so a single unambiguous phone match is
+	linked automatically. Several matches are left alone: picking one here would
+	be guessing, and the assistant can ask instead.
+	"""
+	if not contact:
+		return None
+
+	linked = existing_link(contact)
+	if linked:
+		return linked
+
+	if contact.is_group:
+		# A group is not a person, so there is nobody to verify.
+		return None
+
+	matches = by_phone(contact.wa_id)
+	if len(matches) != 1:
+		return None
+
+	customer = matches[0]
+
+	if auto_link:
+		try:
+			contact.db_set("customer", customer, update_modified=False)
+			frappe.db.commit()
+		except Exception:
+			# Recognising them matters more than remembering them.
+			frappe.log_error(frappe.get_traceback(), "AgentX: could not link a contact")
+
+	return customer
+
+
+def is_verified(contact) -> bool:
+	return bool(resolve_for_contact(contact))
+

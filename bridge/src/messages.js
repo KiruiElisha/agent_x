@@ -97,6 +97,18 @@ export function messageType(message) {
 	return "text";
 }
 
+// Addresses that are not conversations. A status is a broadcast to everyone in
+// someone's contacts, so answering one sends a private reply to a story nobody
+// addressed to us. Channels and broadcast lists are one-way for the same reason.
+const NOT_A_CONVERSATION = ["@broadcast", "@newsletter"];
+
+/** Whether this address is somebody actually talking to us. */
+export function isConversation(chatId) {
+	const jid = String(chatId || "").trim().toLowerCase();
+	if (!jid) return false;
+	return !NOT_A_CONVERSATION.some((suffix) => jid.endsWith(suffix));
+}
+
 const VOICE_KINDS = new Set(["audio", "voice", "ptt"]);
 
 /** Whether this message is something the assistant should try to transcribe. */

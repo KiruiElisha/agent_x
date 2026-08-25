@@ -12,6 +12,8 @@
   "column_break_head",
   "status",
   "acting_user",
+  "memory_section",
+  "notes",
   "state_section",
   "last_message_on",
   "action_count",
@@ -62,6 +64,18 @@
    "in_list_view": 1,
    "label": "Acting As",
    "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "memory_section",
+   "fieldtype": "Section Break",
+   "label": "What the Assistant Is Holding"
+  },
+  {
+   "description": "What the customer asked for that has not been done yet. Carried into every reply so a detour cannot lose it.",
+   "fieldname": "notes",
+   "fieldtype": "Long Text",
+   "label": "Working Notes",
    "read_only": 1
   },
   {
@@ -144,7 +158,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-24 15:00:00.000000",
+ "modified": "2026-08-25 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "Agent Conversation",

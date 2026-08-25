@@ -11,7 +11,7 @@ import frappe
 from frappe import _
 
 from agent_x.agent import policy
-from agent_x.agent.tools import catalogue, customers, documents
+from agent_x.agent.tools import catalogue, customers, documents, memory
 
 # Operation each tool needs, used to decide whether to advertise it at all.
 def handover_tool(ctx, reason: str | None = None) -> dict:
@@ -42,6 +42,8 @@ TOOL_OPERATIONS = {
 	"list_item_groups": "read",
 	"find_doctypes": "read",
 	"hand_over": None,
+	"remember": None,
+	"forget": None,
 	"match_items": "read",
 	"find_customer": "read",
 	"link_customer": "read",
@@ -64,6 +66,8 @@ HANDLERS = {
 	"list_item_groups": catalogue.list_item_groups,
 	"find_doctypes": documents.find_doctypes,
 	"hand_over": handover_tool,
+	"remember": memory.remember,
+	"forget": memory.forget,
 	"match_items": catalogue.match_items,
 	"find_customer": customers.find_customer,
 	"link_customer": customers.link_customer,
@@ -181,6 +185,37 @@ def build_schemas(settings) -> list[dict]:
 
 	if catalogue_enabled(settings, permitted):
 		schemas.extend(catalogue_schemas())
+
+	# Memory is always available. Without it a detour loses the request that
+	# started the conversation.
+	schemas.append(
+		{
+			"name": "remember",
+			"description": (
+				"Write down what the customer asked for that you have not done yet. Use it the "
+				"moment something blocks you, before you go and deal with the blocker. Include "
+				"the details you will need: item codes, quantities, what they wanted. It stays "
+				"in front of you on every reply until you call forget."
+			),
+			"parameters": {
+				"type": "object",
+				"properties": {
+					"note": {
+						"type": "string",
+						"description": "What is still owed, in enough detail to act on later.",
+					}
+				},
+				"required": ["note"],
+			},
+		}
+	)
+	schemas.append(
+		{
+			"name": "forget",
+			"description": "Clear the note, once the work it describes is finished or dropped.",
+			"parameters": {"type": "object", "properties": {}},
+		}
+	)
 
 	if settings.handoff_enabled:
 		schemas.append(

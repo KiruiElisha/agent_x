@@ -13,7 +13,7 @@ import QRCode from "qrcode";
 
 import { config } from "./config.js";
 import { baileysLogger, logger } from "./logger.js";
-import { isGroup, isVoice, normalise } from "./messages.js";
+import { isConversation, isGroup, isVoice, normalise } from "./messages.js";
 import { deliver } from "./webhook.js";
 
 // Reconnect with a backoff so a server-side outage does not become a hot loop.
@@ -210,8 +210,8 @@ class Session {
 			if (!raw?.message) continue;
 
 			const event = normalise(this.id, raw);
-			// Status broadcasts are not conversations.
-			if (event.chat_id === "status@broadcast") continue;
+			// Statuses, channels, and broadcast lists are not conversations.
+			if (!isConversation(event.chat_id)) continue;
 
 			// Decryption needs this message object, which we will not have later,
 			// so a voice note is fetched now or not at all.

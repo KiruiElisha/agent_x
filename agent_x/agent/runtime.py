@@ -13,6 +13,7 @@ from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
 from agent_x.agent import drafts, handoff, knowledge, policy, prompt, provider, registry, summary
+from agent_x.agent.tools import memory
 from agent_x.agent.tools.documents import ToolContext
 from agent_x.agentx.doctype.agent_conversation import agent_conversation
 from agent_x.agentx.doctype.whatsapp_contact.whatsapp_contact import acting_user as resolve_user
@@ -271,7 +272,12 @@ def run_agent(inbound, contact, conversation, settings, user, session, exclude_m
 	retrieved, hits = knowledge.context_for(inbound.get("message") or "", settings)
 	corrections = load_corrections(settings)
 	system = prompt.build(
-		settings, contact, user, knowledge=retrieved, corrections=corrections
+		settings,
+		contact,
+		user,
+		knowledge=retrieved,
+		corrections=corrections,
+		notes=memory.read(conversation),
 	)
 
 	turns = history(contact, settings, exclude_message)

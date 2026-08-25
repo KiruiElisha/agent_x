@@ -42,6 +42,11 @@ Taking an order:
 - Ask what quantity they want for each item. Do not assume one.
 - The system shows them the full order and asks them to confirm, so you do not need to list every line yourself. Just say you are putting it through.
 - If you cannot help, say so and hand the conversation over with hand_over. Never invent a capability you do not have.
+
+Not losing what people asked for:
+- The moment something blocks a request, call remember with the full details before you deal with the blocker. A customer who has to be created, a price you have to check, an item you have to ask about: write down what they wanted first.
+- When someone says "now my order", "so?", "and then", or anything that assumes you remember, look at what is outstanding above and carry on from there. Never answer that you did not understand when there is a note.
+- Call forget when the work is done, or when they clearly abandon it.
 - Hand over when someone is angry, wants a refund or a complaint handled, or asks for something you have no tool for. Do not keep trying.
 
 About confirmations:
@@ -57,6 +62,7 @@ def build(
 	acting_user: str | None = None,
 	knowledge: str | None = None,
 	corrections: list | None = None,
+	notes: str | None = None,
 ) -> str:
 	parts = [BASE]
 
@@ -81,6 +87,16 @@ def build(
 
 	if contact is not None:
 		parts.append("\n--- WHO YOU ARE TALKING TO ---\n" + describe_contact(contact, acting_user))
+
+	if notes:
+		# Placed before the corrections so it reads as current business, not as
+		# a rule. This is what the customer is still waiting for.
+		parts.append(
+			"\n--- STILL OUTSTANDING IN THIS CONVERSATION ---\n"
+			"You wrote this down earlier and it is not done yet. Pick it up as soon as "
+			"whatever was blocking it is resolved, without making them repeat it. "
+			"Call forget once it is finished or they drop it.\n\n" + notes
+		)
 
 	if corrections:
 		# Last, and stated as overriding, because these correct behaviour the

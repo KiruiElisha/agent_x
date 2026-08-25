@@ -48,6 +48,7 @@
   "tuning_section",
   "ai_temperature",
   "ai_max_output_tokens",
+  "ai_thinking_budget",
   "history_limit",
   "column_break_tuning",
   "max_tool_iterations",
@@ -405,13 +406,21 @@
    "precision": "2"
   },
   {
-   "default": "2048",
+   "default": "4096",
    "fieldname": "ai_max_output_tokens",
    "fieldtype": "Int",
    "label": "Max Output Tokens"
   },
   {
-   "default": "12",
+   "default": "0",
+   "description": "Gemini 2.5 and newer think before answering, and those tokens come out of Max Output Tokens. 0 turns thinking off, which is what keeps long orders from using the whole budget and returning nothing.",
+   "fieldname": "ai_thinking_budget",
+   "fieldtype": "Int",
+   "label": "Thinking Budget (tokens)"
+  },
+  {
+   "default": "20",
+   "description": "How many past messages the model sees. Working Notes carry anything older that still matters.",
    "fieldname": "history_limit",
    "fieldtype": "Int",
    "label": "Conversation History Depth"
@@ -1050,7 +1059,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-25 15:00:00.000000",
+ "modified": "2026-08-25 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Settings",

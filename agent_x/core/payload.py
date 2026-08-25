@@ -61,6 +61,22 @@ def is_group_id(chat_id: str | None) -> bool:
 	return str(chat_id or "").endswith("@g.us")
 
 
+# Addresses that are not conversations. A WhatsApp Status is a broadcast to
+# everyone in someone's contacts, and answering one would send a private reply
+# to a story nobody addressed to us. Channels and broadcast lists are one-way
+# for the same reason.
+NOT_A_CONVERSATION = ("@broadcast", "@newsletter")
+
+
+def is_conversation(chat_id: str | None) -> bool:
+	"""Whether this address is somebody actually talking to us."""
+	jid = str(chat_id or "").strip().lower()
+	if not jid:
+		return False
+
+	return not jid.endswith(NOT_A_CONVERSATION)
+
+
 # Containers WaClient nests the Baileys envelope inside, in the order worth
 # trying. It has shipped several shapes, and a `chats.update` carrying a new
 # message looks nothing like a plain `messages.upsert`.
@@ -169,6 +185,11 @@ def parse(payload: dict) -> dict | None:
 
 	chat_id, from_jid_value = sender_jid(key, chat_hint(payload))
 	if not chat_id:
+		return None
+
+	# status@broadcast carries every status post from every contact. Parsing one
+	# as an inbound message means the assistant replies to somebody's story.
+	if not is_conversation(chat_id):
 		return None
 
 	text, message_type, media = extract_content(content)

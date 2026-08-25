@@ -15,7 +15,7 @@ from stub_frappe import Row, install
 
 install()
 
-from agent_x.agent import policy, provider, registry, runtime  # noqa: E402
+from agent_x.agent import policy, prompt, provider, registry, runtime  # noqa: E402
 from agent_x.core import phone  # noqa: E402
 
 
@@ -232,7 +232,16 @@ class TestRegistrySchemas(unittest.TestCase):
 	def test_read_only_policy_advertises_no_write_tools(self):
 		settings = FakeSettings([Row(document_type="Lead", can_read=1)])
 		names = {t["name"] for t in registry.build_schemas(settings)}
-		self.assertEqual(names, {"list_documents", "get_document", "count_documents", "describe_doctype"})
+
+		self.assertEqual(
+			names & {"list_documents", "get_document", "count_documents", "describe_doctype"},
+			{"list_documents", "get_document", "count_documents", "describe_doctype"},
+		)
+		# Nothing that writes, whatever else is on offer.
+		self.assertFalse(
+			names & {"create_document", "update_document", "submit_document",
+			         "cancel_document", "delete_document", "create_customer"}
+		)
 
 	def test_write_tools_are_scoped_to_their_own_doctypes(self):
 		settings = FakeSettings(
@@ -1532,6 +1541,262 @@ class TestCustomerToolsAreRegistered(unittest.TestCase):
 
 	def test_matching_items_only_needs_read(self):
 		self.assertEqual(registry.TOOL_OPERATIONS["match_items"], "read")
+
+
+class TestVerifiedCustomersGate(unittest.TestCase):
+	"""Only Serve Verified Customers, and the ways it could go wrong."""
+
+	def setUp(self):
+		from agent_x.core import webhook
+
+		self.webhook = webhook
+
+	def stranger(self, **settings_kw):
+		class Settings:
+			only_verified_customers = settings_kw.get("only_verified_customers", 1)
+
+		return Settings()
+
+	def test_the_gate_is_off_by_default_for_existing_sites(self):
+		class Off:
+			only_verified_customers = 0
+
+		# Nothing is looked up at all when it is off.
+		self.assertTrue(self.webhook.is_verified_customer(None, Off()))
+
+	def test_a_failed_lookup_does_not_lock_everyone_out(self):
+		# Failing open is right here: a broken Customer query should not silence
+		# the assistant for every customer at once.
+		class Boom:
+			only_verified_customers = 1
+
+		class BadContact:
+			@property
+			def wa_id(self):
+				raise RuntimeError("database is unhappy")
+
+		self.assertTrue(self.webhook.is_verified_customer(BadContact(), Boom()))
+
+	def test_the_skip_reason_is_specific(self):
+		import inspect
+
+		source = inspect.getsource(self.webhook.should_skip)
+		self.assertIn("not a known customer", source)
+
+	def test_the_notice_is_keyed_on_inbound_not_outbound(self):
+		# Counting our own sent messages means a send that failed is retried on
+		# every message the person ever sends.
+		import inspect
+
+		source = inspect.getsource(self.webhook.notify_unverified)
+		self.assertIn('"direction": "Incoming"', source)
+		self.assertNotIn('"direction": "Outgoing"', source)
+
+
+class TestCustomerVerification(unittest.TestCase):
+	def test_a_group_is_never_verified(self):
+		from agent_x.agent.tools import customers
+
+		class Group:
+			is_group = 1
+			customer = None
+			wa_id = "120363000"
+
+		# A group is not a person, so there is nobody to verify.
+		self.assertIsNone(customers.resolve_for_contact(Group(), auto_link=False))
+
+	def test_an_existing_link_wins_without_a_lookup(self):
+		from agent_x.agent.tools import customers
+
+		class Linked:
+			is_group = 0
+			customer = "ACME"
+			wa_id = "254113456822"
+
+		customers.existing_link = lambda c: c.customer
+		self.assertEqual(customers.resolve_for_contact(Linked(), auto_link=False), "ACME")
+
+	def test_several_matches_are_not_guessed_between(self):
+		from agent_x.agent.tools import customers
+
+		class Contact:
+			is_group = 0
+			customer = None
+			wa_id = "254113456822"
+
+		customers.existing_link = lambda c: None
+		customers.by_phone = lambda n: ["ACME", "ACME LTD"]
+		# Picking one would put orders on the wrong company.
+		self.assertIsNone(customers.resolve_for_contact(Contact(), auto_link=False))
+
+	def test_exactly_one_match_is_accepted(self):
+		from agent_x.agent.tools import customers
+
+		class Contact:
+			is_group = 0
+			customer = None
+			wa_id = "254113456822"
+
+		customers.existing_link = lambda c: None
+		customers.by_phone = lambda n: ["ACME"]
+		self.assertEqual(customers.resolve_for_contact(Contact(), auto_link=False), "ACME")
+
+
+class TestOnlyRealConversations(unittest.TestCase):
+	"""A WhatsApp Status is a broadcast to everyone in someone's contacts.
+
+	Parsing one as an inbound message means the assistant sends a private reply
+	to somebody's story. The bridge always filtered these; the WaClient path did
+	not, which is the path in production.
+	"""
+
+	def envelope(self, remote, event="messages.upsert", **extra):
+		body = {"instance_id": "I", "data": {"event": event, "messages": [
+			{"key": {"remoteJid": remote, "id": "X1", "fromMe": False},
+			 "message": {"conversation": "Hello"}, "pushName": "Someone"}]}}
+		body["data"].update(extra)
+		return body
+
+	def test_a_status_post_is_not_a_conversation(self):
+		self.assertIsNone(wa_payload.parse(self.envelope("status@broadcast")))
+
+	def test_a_broadcast_list_is_not_a_conversation(self):
+		self.assertIsNone(wa_payload.parse(self.envelope("1234567890@broadcast")))
+
+	def test_a_channel_is_not_a_conversation(self):
+		self.assertIsNone(wa_payload.parse(self.envelope("120363000000@newsletter")))
+
+	def test_a_status_hiding_behind_a_lid_alt_is_still_caught(self):
+		body = self.envelope("status@broadcast")
+		body["data"]["messages"][0]["key"]["remoteJidAlt"] = "254113456822@s.whatsapp.net"
+		self.assertIsNone(wa_payload.parse(body))
+
+	def test_direct_chats_and_groups_still_parse(self):
+		for jid in ("254113456822@s.whatsapp.net", "120363000000000000@g.us"):
+			parsed = wa_payload.parse(self.envelope(jid))
+			self.assertIsNotNone(parsed, jid)
+			self.assertEqual(parsed["text"], "Hello")
+
+	def test_is_conversation_directly(self):
+		for jid in ("status@broadcast", "x@broadcast", "y@newsletter", "", None):
+			self.assertFalse(wa_payload.is_conversation(jid), jid)
+		for jid in ("2547@s.whatsapp.net", "120@g.us"):
+			self.assertTrue(wa_payload.is_conversation(jid), jid)
+
+
+class TestReceiptsAreNeverMessages(unittest.TestCase):
+	def test_an_unrecognised_ack_does_not_fall_through(self):
+		# The dispatcher used to only return when the ack mapped to a known
+		# status, so a new status name got logged and answered as a message.
+		import inspect
+
+		from agent_x.core import webhook
+
+		source = inspect.getsource(webhook.dispatch_waclient)
+		self.assertIn("delivery receipt", source)
+
+	def test_ack_events_are_recognised(self):
+		for event in ("messages.ack", "message.status", "receipt.update"):
+			self.assertTrue(wa_payload.is_ack_event(event), event)
+
+	def test_a_chats_update_is_not_an_ack(self):
+		self.assertFalse(wa_payload.is_ack_event("chats.update"))
+
+
+# --------------------------------------------------------------------------
+# Why the assistant went blank mid-order.
+#
+# A nine item order, a detour to create a customer, then "now my order" and
+# nothing. Two separate causes: the model returned empty content and the code
+# read that as "no answer", and the request itself only lived in the message
+# window, which slides.
+# --------------------------------------------------------------------------
+
+
+class TestEmptyModelReply(unittest.TestCase):
+	def test_running_out_of_tokens_is_named(self):
+		with self.assertRaises(provider.AIError) as caught:
+			provider.explain_empty({"finishReason": "MAX_TOKENS"}, {})
+		self.assertIn("output tokens", str(caught.exception).lower())
+
+	def test_thinking_tokens_are_pointed_at_when_they_caused_it(self):
+		with self.assertRaises(provider.AIError) as caught:
+			provider.explain_empty({"finishReason": "MAX_TOKENS"}, {"thoughtsTokenCount": 1900})
+		self.assertIn("thinking", str(caught.exception).lower())
+
+	def test_a_refusal_is_named(self):
+		for reason in ("SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST"):
+			with self.assertRaises(provider.AIError):
+				provider.explain_empty({"finishReason": reason}, {})
+
+	def test_a_normal_stop_is_not_an_error(self):
+		self.assertIsNone(provider.explain_empty({"finishReason": "STOP"}, {}))
+		self.assertIsNone(provider.explain_empty({}, {}))
+
+
+class TestThinkingBudget(unittest.TestCase):
+	"""Gemini 2.5 and newer spend the reply budget on thinking unless told not to."""
+
+	class Settings:
+		ai_thinking_budget = 0
+
+	def test_versions_are_read_from_the_model_name(self):
+		self.assertEqual(provider.model_version("gemini-2.5-flash"), (2, 5))
+		self.assertEqual(provider.model_version("gemini-3-pro"), (3, 0))
+		self.assertEqual(provider.model_version("gemini-1.5-pro"), (1, 5))
+		self.assertIsNone(provider.model_version("gpt-4o-mini"))
+
+	def test_thinking_models_get_a_budget(self):
+		for model in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-pro", "gemini-3.0-flash"):
+			self.assertEqual(provider.thinking_budget(self.Settings(), model), 0, model)
+
+	def test_older_models_are_left_alone(self):
+		# Sending thinkingConfig to a model that does not think is an error.
+		for model in ("gemini-2.0-flash", "gemini-1.5-pro", "", None):
+			self.assertIsNone(provider.thinking_budget(self.Settings(), model), model)
+
+	def test_a_configured_budget_is_honoured(self):
+		class Generous:
+			ai_thinking_budget = 1024
+
+		self.assertEqual(provider.thinking_budget(Generous(), "gemini-2.5-flash"), 1024)
+
+
+class TestWorkingMemory(unittest.TestCase):
+	"""Conversation history is a window and it slides. A note does not."""
+
+	class Settings:
+		business_context = ""
+		system_prompt = ""
+		automation_enabled = 0
+		doctype_policies = []
+		max_reply_characters = 1500
+		policy_mode = "Listed Documents Only"
+
+	def test_a_note_reaches_the_prompt(self):
+		note = "Customer wants 5 each of 111574, 111462, 111656 - blocked on their account."
+		built = prompt.build(self.Settings(), notes=note)
+		self.assertIn(note, built)
+
+	def test_the_note_is_framed_as_unfinished_work(self):
+		built = prompt.build(self.Settings(), notes="something owed")
+		self.assertIn("STILL OUTSTANDING", built)
+		self.assertIn("without making them repeat", built)
+
+	def test_no_note_adds_no_section(self):
+		self.assertNotIn("STILL OUTSTANDING", prompt.build(self.Settings()))
+
+	def test_memory_tools_need_no_doctype(self):
+		# They act on the conversation, so there is no policy to check.
+		self.assertIsNone(registry.TOOL_OPERATIONS["remember"])
+		self.assertIsNone(registry.TOOL_OPERATIONS["forget"])
+
+	def test_memory_is_always_offered(self):
+		# Even with automation off; losing a request is not an automation feature.
+		settings = FakeSettings([Row(document_type="Lead", can_read=1)])
+		names = {t["name"] for t in registry.build_schemas(settings)}
+		self.assertIn("remember", names)
+		self.assertIn("forget", names)
 
 
 if __name__ == "__main__":

@@ -179,11 +179,14 @@ def dispatch_waclient(body: dict, settings) -> dict:
 	if not parsed:
 		return {"status": "ignored", "reason": "no message in payload"}
 
-	# Delivery receipts arrive on the same endpoint as messages.
+	# Delivery receipts arrive on the same endpoint as messages. Whether or not
+	# the ack is one we recognise, this is not something to answer: falling
+	# through would log a receipt as an inbound message and reply to it.
 	if payload_parser.is_status_event(parsed):
 		status = payload_parser.extract_ack(body, parsed)
 		if status:
 			return apply_receipt(parsed.get("message_id"), status)
+		return {"status": "ignored", "reason": "delivery receipt"}
 
 	if not parsed.get("wa_id"):
 		return {"status": "ignored", "reason": "no sender"}

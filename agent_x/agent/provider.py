@@ -10,6 +10,7 @@ Neutral turn shapes:
 """
 
 import json
+import re
 
 import requests
 
@@ -94,9 +95,17 @@ def call_gemini(settings, system, turns, tools, api_key) -> Reply:
 		"contents": [gemini_turn(turn) for turn in group_turns(turns)],
 		"generationConfig": {
 			"temperature": settings.ai_temperature or 0.3,
-			"maxOutputTokens": settings.ai_max_output_tokens or 2048,
+			"maxOutputTokens": settings.ai_max_output_tokens or 4096,
 		},
 	}
+
+	# The 2.5 models think before answering, and those tokens come out of the
+	# same budget as the reply. A long order can use the whole allowance on
+	# thinking and return nothing at all, which reads as the model having no
+	# answer. A budget of 0 turns it off; anything higher caps it.
+	budget = thinking_budget(settings, model)
+	if budget is not None:
+		payload["generationConfig"]["thinkingConfig"] = {"thinkingBudget": budget}
 
 	if tools:
 		payload["tools"] = [{"functionDeclarations": [gemini_declaration(t) for t in tools]}]
@@ -118,7 +127,8 @@ def call_gemini(settings, system, turns, tools, api_key) -> Reply:
 			raise AIError(_("Gemini blocked the request: {0}").format(blocked))
 		raise AIError(_("Gemini returned no reply."))
 
-	parts = (candidates[0].get("content") or {}).get("parts") or []
+	candidate = candidates[0]
+	parts = (candidate.get("content") or {}).get("parts") or []
 
 	text = "".join(p.get("text", "") for p in parts if "text" in p)
 	tool_calls = [
@@ -133,6 +143,13 @@ def call_gemini(settings, system, turns, tools, api_key) -> Reply:
 	]
 
 	usage = body.get("usageMetadata") or {}
+
+	# An empty answer is never just an empty answer: the model stopped for a
+	# reason and saying which one is the difference between a fixable setting
+	# and a mystery.
+	if not text and not tool_calls:
+		explain_empty(candidate, usage)
+
 	return Reply(
 		text,
 		tool_calls,
@@ -141,6 +158,60 @@ def call_gemini(settings, system, turns, tools, api_key) -> Reply:
 			"output_tokens": usage.get("candidatesTokenCount"),
 		},
 	)
+
+
+# Thinking arrived in Gemini 2.5 and is the default from there on.
+FIRST_THINKING_VERSION = (2, 5)
+
+
+def model_version(model: str) -> tuple[int, int] | None:
+	"""The version out of a name like gemini-2.5-flash or gemini-3-pro."""
+	found = re.search(r"gemini-(\d+)(?:[.-](\d+))?", str(model or "").lower())
+	if not found:
+		return None
+
+	major = int(found.group(1))
+	# "gemini-3-pro" has no minor part, and "pro" is not a number.
+	minor = found.group(2)
+	return (major, int(minor) if minor and minor.isdigit() else 0)
+
+
+def thinks(model: str) -> bool:
+	version = model_version(model)
+	return bool(version and version >= FIRST_THINKING_VERSION)
+
+
+def thinking_budget(settings, model: str) -> int | None:
+	"""How many tokens the model may spend thinking, or None to leave it alone."""
+	if not thinks(model):
+		return None
+
+	budget = getattr(settings, "ai_thinking_budget", None)
+	return 0 if budget in (None, "") else int(budget)
+
+
+def explain_empty(candidate: dict, usage: dict) -> None:
+	"""Turn an empty Gemini answer into something actionable."""
+	reason = str(candidate.get("finishReason") or "").upper()
+
+	if reason == "MAX_TOKENS":
+		thought = usage.get("thoughtsTokenCount") or 0
+		detail = _(
+			"Gemini ran out of output tokens before it answered. Raise Max Output Tokens "
+			"in AgentX Settings."
+		)
+		if thought:
+			detail += " " + _("It spent {0} tokens thinking; set Thinking Budget to 0 to stop that.").format(thought)
+		raise AIError(detail)
+
+	if reason in ("SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST"):
+		raise AIError(_("Gemini refused to answer this one ({0}).").format(reason))
+
+	if reason == "RECITATION":
+		raise AIError(_("Gemini stopped because the answer looked like recited text."))
+
+	if reason and reason not in ("STOP", "FINISH_REASON_UNSPECIFIED"):
+		raise AIError(_("Gemini stopped early: {0}").format(reason))
 
 
 def gemini_turn(turn: dict) -> dict:

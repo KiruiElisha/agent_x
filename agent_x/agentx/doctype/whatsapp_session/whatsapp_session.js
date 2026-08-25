@@ -56,6 +56,22 @@ frappe.ui.form.on("WhatsApp Session", {
 
 	onload(frm) {
 		frm.trigger("listen");
+
+		// A new session has no provider yet, and the Instance ID field keys off
+		// it. Take both from settings so the form is usable straight away.
+		if (frm.is_new()) {
+			frappe.db.get_doc("AgentX Settings").then((settings) => {
+				if (!frm.doc.provider) {
+					frm.set_value("provider", settings.whatsapp_provider || "WaClient");
+				}
+				if (!frm.doc.instance_id && settings.waclient_instance_id) {
+					frm.set_value("instance_id", settings.waclient_instance_id);
+				}
+				if (!frm.doc.session_name) {
+					frm.set_value("session_name", "main");
+				}
+			});
+		}
 	},
 
 	listen(frm) {

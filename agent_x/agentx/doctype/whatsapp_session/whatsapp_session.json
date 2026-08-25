@@ -31,7 +31,7 @@
  ],
  "fields": [
   {
-   "description": "Lowercase letters, digits, dash or underscore. Becomes the folder name on the bridge.",
+   "description": "A short name for this connection, e.g. main. Lowercase letters, digits, dash or underscore.",
    "fieldname": "session_name",
    "fieldtype": "Data",
    "label": "Session Name",
@@ -51,14 +51,14 @@
    "label": "Default Session"
   },
   {
-   "depends_on": "eval:doc.provider==\"WaClient\"",
-   "description": "Leave empty to use the Instance ID from AgentX Settings. Set it only when this session is a different number.",
+   "depends_on": "eval:!doc.provider || doc.provider==\"WaClient\"",
+   "description": "From your WaClient dashboard. Leave empty to use the Instance ID set in AgentX Settings; fill it only when this session is a different number.",
    "fieldname": "instance_id",
    "fieldtype": "Data",
-   "label": "WaClient Instance ID"
+   "label": "Instance ID"
   },
   {
-   "description": "Taken from AgentX Settings when the session is saved.",
+   "description": "Follows AgentX Settings.",
    "fieldname": "provider",
    "fieldtype": "Select",
    "label": "Provider",
@@ -174,7 +174,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-22 00:00:00.000000",
+ "modified": "2026-08-24 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "WhatsApp Session",

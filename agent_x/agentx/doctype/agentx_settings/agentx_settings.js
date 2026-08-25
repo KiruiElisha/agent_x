@@ -356,3 +356,41 @@ function connect(frm) {
 		frm.trigger("render_connection");
 	});
 }
+
+function diagnose() {
+	frappe.call({
+		method: "agent_x.diagnostics.run",
+		freeze: true,
+		freeze_message: __("Checking every step…"),
+		callback(r) {
+			const result = r.message || {};
+			const rows = (result.results || [])
+				.map((c) => {
+					const mark =
+						c.ok === true
+							? '<span class="indicator green"></span>'
+							: c.ok === false
+								? '<span class="indicator red"></span>'
+								: '<span class="indicator grey"></span>';
+					const detail = c.detail
+						? `<div class="text-muted small">${frappe.utils.escape_html(c.detail)}</div>`
+						: "";
+					const fix =
+						c.ok === false && c.fix
+							? `<div class="small" style="margin-top:2px;"><b>${__("Fix")}:</b> ${frappe.utils.escape_html(c.fix)}</div>`
+							: "";
+					return `<div style="padding:7px 0;border-bottom:1px solid var(--border-color);">
+								${mark}${frappe.utils.escape_html(c.check)}${detail}${fix}
+							</div>`;
+				})
+				.join("");
+
+			frappe.msgprint({
+				title: __("AgentX Diagnosis"),
+				indicator: result.ok ? "green" : "red",
+				message: `<div style="margin-bottom:8px;">${frappe.utils.escape_html(result.summary || "")}</div>${rows}`,
+				wide: true,
+			});
+		},
+	});
+}

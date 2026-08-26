@@ -73,7 +73,51 @@ def handle(
 			or _("Let me get a person to help you. Someone will reply shortly.")
 		)
 
+	# A rule that answers on its own never reaches the model. Deliberately last
+	# of the shortcuts: a pending confirmation and a handover both own the reply
+	# before this, so a rule matching on "yes" can never swallow a consent.
+	rule = matching_rule(text, settings, conversation)
+	if rule:
+		reply = rule.render(contact, settings)
+		rule.record_use()
+		if rule.stop_here:
+			return AgentResult(reply, rule=rule.name)
+
+		# Answer first, then still let the assistant handle the substance.
+		deliver_now = AgentResult(reply, rule=rule.name)
+		result = run_agent(inbound, contact, conversation, settings, user, session, exclude_message)
+		if result and result.reply:
+			result.reply = f"{reply}\n\n{result.reply}"
+			return result
+		return deliver_now
+
 	return run_agent(inbound, contact, conversation, settings, user, session, exclude_message)
+
+
+def matching_rule(text: str, settings, conversation):
+	"""A canned answer for this message, if one applies.
+
+	Skipped whenever the conversation is mid-flow: a confirmation is waiting on
+	a yes or no, and a handover means a person is already dealing with it.
+	"""
+	if not settings.reply_rules_enabled:
+		return None
+
+	if conversation.status in ("Awaiting Confirmation", "Handed Over"):
+		return None
+
+	# Something is still owed. A canned line would look like the assistant has
+	# forgotten it, which is the problem the notes exist to solve.
+	if (conversation.notes or "").strip():
+		return None
+
+	try:
+		from agent_x.agentx.doctype.whatsapp_reply_rule.whatsapp_reply_rule import find_match
+
+		return find_match(text, settings)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "AgentX: reply rule lookup failed")
+		return None
 
 
 # ------------------------------------------------------------------ confirmations
@@ -244,8 +288,45 @@ def park_for_confirmation(conversation, action_id: str, settings) -> None:
 # ------------------------------------------------------------------ the loop
 
 
+def tokens_used_today() -> int:
+	"""What the model has cost since midnight, across every conversation."""
+	from frappe.query_builder.functions import Sum
+
+	run = frappe.qb.DocType("Agent Run")
+	rows = (
+		frappe.qb.from_(run)
+		.select(Sum(run.input_tokens + run.output_tokens).as_("total"))
+		.where(run.creation >= frappe.utils.today())
+	).run(as_dict=True)
+
+	return int((rows[0].get("total") if rows else 0) or 0)
+
+
+def over_budget(settings) -> bool:
+	budget = settings.daily_token_budget or 0
+	if budget <= 0:
+		return False
+
+	try:
+		return tokens_used_today() >= budget
+	except Exception:
+		# A failed count must not be what stops the assistant working.
+		frappe.log_error(frappe.get_traceback(), "AgentX: could not read today's token use")
+		return False
+
+
 def run_agent(inbound, contact, conversation, settings, user, session, exclude_message=None) -> AgentResult:
 	started = time.monotonic()
+
+	# Running out of quota mid-conversation looks like the assistant breaking.
+	# Stopping at a line we set, and handing over, is the same cost to the
+	# customer and none to the bill.
+	if over_budget(settings):
+		handoff.start(conversation, settings, reason=_("The daily model budget is used up."))
+		return AgentResult(
+			(settings.handoff_message or "").strip()
+			or _("Let me get a person to help you with this. Someone will reply shortly.")
+		)
 
 	run = frappe.get_doc(
 		{

@@ -1,0 +1,178 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:title",
+ "creation": "2026-08-25 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "enabled",
+  "column_break_head",
+  "match_type",
+  "priority",
+  "pattern_section",
+  "pattern",
+  "case_sensitive",
+  "vectors",
+  "vectors_built_on",
+  "reply_section",
+  "reply",
+  "stop_here",
+  "stats_section",
+  "times_used",
+  "last_used_on",
+  "column_break_stats",
+  "tokens_saved"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Exact",
+   "description": "Semantic matches by meaning, so you write a few phrasings and it catches the rest. It costs one embedding per message, which is a fraction of a model call.",
+   "fieldname": "match_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Match",
+   "options": "Exact\nContains\nStarts With\nRegex\nSemantic",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "Higher wins when more than one rule matches.",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority"
+  },
+  {
+   "fieldname": "pattern_section",
+   "fieldtype": "Section Break",
+   "label": "What to Look For"
+  },
+  {
+   "description": "One per line. For Semantic, give three or four natural phrasings; you do not need every variation.",
+   "fieldname": "pattern",
+   "fieldtype": "Small Text",
+   "label": "Pattern",
+   "reqd": 1
+  },
+  {
+   "fieldname": "case_sensitive",
+   "fieldtype": "Check",
+   "label": "Case Sensitive"
+  },
+  {
+   "fieldname": "vectors",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Embeddings",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.match_type==\"Semantic\"",
+   "fieldname": "vectors_built_on",
+   "fieldtype": "Datetime",
+   "label": "Embedded On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "reply_section",
+   "fieldtype": "Section Break",
+   "label": "What to Say"
+  },
+  {
+   "description": "Jinja is allowed: {{ contact.contact_name }}, {{ settings.business_context }}.",
+   "fieldname": "reply",
+   "fieldtype": "Text",
+   "label": "Reply",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "description": "The whole point: a rule that answers on its own costs nothing. Untick only to send this first and still let the assistant reply.",
+   "fieldname": "stop_here",
+   "fieldtype": "Check",
+   "label": "Do Not Involve the AI"
+  },
+  {
+   "fieldname": "stats_section",
+   "fieldtype": "Section Break",
+   "label": "Use"
+  },
+  {
+   "fieldname": "times_used",
+   "fieldtype": "Int",
+   "label": "Times Used",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_used_on",
+   "fieldtype": "Datetime",
+   "label": "Last Used",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_stats",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Each one is roughly 3,500 tokens of prompt that never had to be sent.",
+   "fieldname": "tokens_saved",
+   "fieldtype": "Int",
+   "label": "Model Calls Avoided",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-25 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "WhatsApp Reply Rule",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

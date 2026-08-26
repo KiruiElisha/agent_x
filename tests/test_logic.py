@@ -1799,5 +1799,284 @@ class TestWorkingMemory(unittest.TestCase):
 		self.assertIn("forget", names)
 
 
+class TestGroupsAreLeftAlone(unittest.TestCase):
+	"""A bot answering in a group talks over everyone in it."""
+
+	def setUp(self):
+		from agent_x.core import webhook
+
+		self.webhook = webhook
+
+	class Settings:
+		def __init__(self, reply_to_groups=0):
+			self.reply_to_groups = reply_to_groups
+			self.ai_enabled = 1
+			self.only_verified_customers = 0
+			self.reply_scope = "Everyone"
+
+		def is_excluded(self, number):
+			return False
+
+		def is_allowed(self, number):
+			return True
+
+	class Contact:
+		blocked = 0
+		opted_out = 0
+		wa_id = "254700111222"
+
+	def test_a_group_is_skipped_by_default(self):
+		reason = self.webhook.should_skip(self.Contact(), self.Settings(), is_group=True)
+		self.assertEqual(reason, "group chat")
+
+	def test_a_direct_chat_is_served(self):
+		self.assertIsNone(self.webhook.should_skip(self.Contact(), self.Settings(), is_group=False))
+
+	def test_the_setting_can_open_groups_up(self):
+		reason = self.webhook.should_skip(
+			self.Contact(), self.Settings(reply_to_groups=1), is_group=True
+		)
+		self.assertIsNone(reason)
+
+	def test_the_group_check_comes_first(self):
+		# Before the allowlist and before customer verification, so a group can
+		# never fall through to the "not a known customer" notice and get a
+		# reply that way.
+		import inspect
+
+		source = inspect.getsource(self.webhook.should_skip)
+		group_at = source.index("group chat")
+		self.assertLess(group_at, source.index("not an allowed number"))
+		self.assertLess(group_at, source.index("not a known customer"))
+
+	def test_a_group_message_still_identifies_the_real_sender(self):
+		# Logged for the record, with the participant as the sender rather than
+		# the group id.
+		grp = {"data": {"event": "messages.upsert", "messages": [{"key": {
+			"remoteJid": "120363000@g.us", "participant": "254700111222@s.whatsapp.net",
+			"id": "G1", "fromMe": False}, "message": {"conversation": "hi"},
+			"pushName": "X"}]}, "instance_id": "I"}
+		parsed = wa_payload.parse(grp)
+		self.assertTrue(parsed["is_group"])
+		self.assertEqual(parsed["wa_id"], "254700111222")
+		self.assertEqual(parsed["chat_id"], "120363000@g.us")
+
+
+# --------------------------------------------------------------------------
+# Keeping the model bill down.
+#
+# Every call carries the whole system prompt and every tool definition with it,
+# measured at roughly 2,900 tokens before the conversation. The cheapest call
+# is the one that never happens.
+# --------------------------------------------------------------------------
+
+
+class Rule:
+	"""Stands in for a WhatsApp Reply Rule row."""
+
+	def __init__(self, pattern, match_type="Exact", case_sensitive=0):
+		self.pattern = pattern
+		self.match_type = match_type
+		self.case_sensitive = case_sensitive
+		self.enabled = 1
+
+	def patterns(self):
+		return [line.strip() for line in self.pattern.splitlines() if line.strip()]
+
+
+def matches(rule, text):
+	from agent_x.agentx.doctype.whatsapp_reply_rule.whatsapp_reply_rule import WhatsAppReplyRule
+
+	return WhatsAppReplyRule.matches(rule, text)
+
+
+class TestReplyRuleMatching(unittest.TestCase):
+	def test_exact_ignores_case_and_spacing_by_default(self):
+		rule = Rule("hi\nhello")
+		for text in ("hi", "Hi", "HELLO", "  hello  "):
+			self.assertTrue(matches(rule, text), text)
+
+	def test_exact_does_not_match_a_sentence(self):
+		# "hi" must not answer "hi, can I order 5 boxes of paracetamol".
+		rule = Rule("hi")
+		self.assertFalse(matches(rule, "hi, can I order 5 boxes"))
+
+	def test_contains_matches_inside_a_sentence(self):
+		rule = Rule("opening hours", match_type="Contains")
+		self.assertTrue(matches(rule, "what are your opening hours today?"))
+
+	def test_starts_with(self):
+		rule = Rule("order", match_type="Starts With")
+		self.assertTrue(matches(rule, "order 5 boxes"))
+		self.assertFalse(matches(rule, "I want to order 5 boxes"))
+
+	def test_regex(self):
+		rule = Rule(r"^\d{1,3}$", match_type="Regex")
+		self.assertTrue(matches(rule, "42"))
+		self.assertFalse(matches(rule, "forty two"))
+
+	def test_a_broken_regex_does_not_raise(self):
+		rule = Rule("[unclosed", match_type="Regex")
+		self.assertFalse(matches(rule, "anything"))
+
+	def test_case_sensitive_when_asked(self):
+		rule = Rule("OK", case_sensitive=1)
+		self.assertTrue(matches(rule, "OK"))
+		self.assertFalse(matches(rule, "ok"))
+
+
+class TestRulesNeverHijackAFlow(unittest.TestCase):
+	"""The ordering is the safety property here."""
+
+	class Settings:
+		reply_rules_enabled = 1
+
+	class Conversation:
+		def __init__(self, status="Active", notes=None):
+			self.status = status
+			self.notes = notes
+
+	def test_a_pending_confirmation_is_never_intercepted(self):
+		# A rule matching "yes" must not swallow a consent to a document change.
+		self.assertIsNone(
+			runtime.matching_rule("yes", self.Settings(), self.Conversation("Awaiting Confirmation"))
+		)
+
+	def test_a_handover_is_never_intercepted(self):
+		self.assertIsNone(
+			runtime.matching_rule("hello", self.Settings(), self.Conversation("Handed Over"))
+		)
+
+	def test_outstanding_work_is_never_intercepted(self):
+		# A canned line would look like the assistant had forgotten the order.
+		self.assertIsNone(
+			runtime.matching_rule("hello", self.Settings(), self.Conversation(notes="owes an order"))
+		)
+
+	def test_rules_can_be_switched_off_entirely(self):
+		class Off:
+			reply_rules_enabled = 0
+
+		self.assertIsNone(runtime.matching_rule("hello", Off(), self.Conversation()))
+
+
+class TestDailyBudget(unittest.TestCase):
+	def test_no_budget_means_no_limit(self):
+		class Unlimited:
+			daily_token_budget = 0
+
+		self.assertFalse(runtime.over_budget(Unlimited()))
+
+	def test_a_failed_count_does_not_stop_the_assistant(self):
+		class Broken:
+			daily_token_budget = 1000
+
+		original = runtime.tokens_used_today
+		runtime.tokens_used_today = lambda: (_ for _ in ()).throw(RuntimeError("no db"))
+		try:
+			self.assertFalse(runtime.over_budget(Broken()))
+		finally:
+			runtime.tokens_used_today = original
+
+	def test_the_budget_stops_the_model_when_reached(self):
+		class Tight:
+			daily_token_budget = 100
+
+		original = runtime.tokens_used_today
+		runtime.tokens_used_today = lambda: 150
+		try:
+			self.assertTrue(runtime.over_budget(Tight()))
+		finally:
+			runtime.tokens_used_today = original
+
+
+class TestSemanticMatching(unittest.TestCase):
+	"""Vectors used to avoid the generation call, not to feed it.
+
+	Retrieval for the prompt only saves whatever business context would have
+	been pasted in. Avoiding the call saves the whole call, which on this app
+	is about 3,200 tokens.
+	"""
+
+	def setUp(self):
+		from agent_x.agent import semantic
+
+		self.semantic = semantic
+
+	def test_the_same_question_is_only_embedded_once(self):
+		# Casing and spacing must not produce a second embedding call.
+		a = self.semantic.fingerprint("What time do you open?")
+		self.assertEqual(a, self.semantic.fingerprint("what time do you open?"))
+		self.assertEqual(a, self.semantic.fingerprint("  What   time do you open? "))
+
+	def test_a_different_question_gets_a_different_key(self):
+		self.assertNotEqual(
+			self.semantic.fingerprint("what time do you open?"),
+			self.semantic.fingerprint("what time do you close?"),
+		)
+
+	def test_an_empty_message_is_still_hashable(self):
+		self.assertTrue(self.semantic.fingerprint(""))
+		self.assertTrue(self.semantic.fingerprint(None))
+
+	def test_cosine_picks_the_closest_phrasing(self):
+		import numpy
+
+		def norm(v):
+			v = numpy.array(v, dtype=numpy.float32)
+			return v / (numpy.linalg.norm(v) or 1.0)
+
+		rules = numpy.stack([norm([1, 0, 0]), norm([0.9, 0.4, 0])])
+		close = rules @ norm([0.88, 0.45, 0.02])
+		self.assertEqual(int(numpy.argmax(close)), 1)
+		self.assertGreater(float(close.max()), 0.80)
+
+	def test_an_unrelated_question_scores_below_the_floor(self):
+		# Answering the wrong question from a rule is worse than paying for a
+		# proper reply.
+		import numpy
+
+		def norm(v):
+			v = numpy.array(v, dtype=numpy.float32)
+			return v / (numpy.linalg.norm(v) or 1.0)
+
+		rules = numpy.stack([norm([1, 0, 0]), norm([0.9, 0.4, 0])])
+		far = rules @ norm([0, 0.05, 1])
+		self.assertLess(float(far.max()), 0.80)
+
+	def test_matching_degrades_quietly_without_embeddings(self):
+		# No key or no quota must lose the optimisation, not the reply.
+		class Settings:
+			semantic_threshold = 0.8
+
+		original = self.semantic.embed_one
+		self.semantic.embed_one = lambda text, settings: None
+		try:
+			name, score = self.semantic.best_rule("anything", Settings())
+			self.assertIsNone(name)
+		finally:
+			self.semantic.embed_one = original
+
+
+class TestRuleOrderingIsCheapestFirst(unittest.TestCase):
+	def test_word_rules_are_tried_before_semantic_ones(self):
+		# A word match is free; a semantic match costs an embedding. Reaching
+		# for the paid one first would waste a call on every greeting.
+		import inspect
+
+		from agent_x.agentx.doctype.whatsapp_reply_rule import whatsapp_reply_rule
+
+		source = inspect.getsource(whatsapp_reply_rule.find_match)
+		self.assertLess(source.index("rule.matches(body)"), source.index("best_rule"))
+
+	def test_semantic_is_skipped_when_no_semantic_rules_exist(self):
+		import inspect
+
+		from agent_x.agentx.doctype.whatsapp_reply_rule import whatsapp_reply_rule
+
+		source = inspect.getsource(whatsapp_reply_rule.find_match)
+		self.assertIn("if not semantic_rules:", source)
+
+
 if __name__ == "__main__":
 	unittest.main(verbosity=2)

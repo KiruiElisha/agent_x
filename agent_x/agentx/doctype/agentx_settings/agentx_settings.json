@@ -59,6 +59,12 @@
   "transcribe_voice_notes",
   "column_break_audio",
   "max_audio_mb",
+  "efficiency_section",
+  "reply_rules_enabled",
+  "semantic_threshold",
+  "daily_token_budget",
+  "column_break_efficiency",
+  "budget_status_html",
   "vision_section",
   "ai_read_images",
   "ai_max_image_mb",
@@ -419,7 +425,7 @@
    "label": "Thinking Budget (tokens)"
   },
   {
-   "default": "20",
+   "default": "12",
    "description": "How many past messages the model sees. Working Notes carry anything older that still matters.",
    "fieldname": "history_limit",
    "fieldtype": "Int",
@@ -430,8 +436,8 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "6",
-   "description": "How many times the model may call tools before it must answer.",
+   "default": "4",
+   "description": "How many times the model may call tools before it must answer. Each step is a full call carrying the whole prompt, so this is the single biggest lever on cost.",
    "fieldname": "max_tool_iterations",
    "fieldtype": "Int",
    "label": "Max Tool Steps Per Turn"
@@ -478,6 +484,43 @@
    "fieldname": "max_audio_mb",
    "fieldtype": "Int",
    "label": "Max Audio Size (MB)"
+  },
+  {
+   "fieldname": "efficiency_section",
+   "fieldtype": "Section Break",
+   "label": "Keeping the Model Bill Down"
+  },
+  {
+   "default": "1",
+   "description": "Answer common messages from WhatsApp Reply Rule without involving the model at all. Each rule that matches saves roughly 3,500 tokens.",
+   "fieldname": "reply_rules_enabled",
+   "fieldtype": "Check",
+   "label": "Use Reply Rules First"
+  },
+  {
+   "default": "0.80",
+   "depends_on": "reply_rules_enabled",
+   "description": "How close in meaning a message must be to answer from a rule. Lower catches more but risks answering the wrong question; 0.80 is a safe start.",
+   "fieldname": "semantic_threshold",
+   "fieldtype": "Float",
+   "label": "Semantic Match Threshold",
+   "precision": "2"
+  },
+  {
+   "default": "0",
+   "description": "Stop calling the model once this many tokens have been used today. 0 means no limit. Conversations are handed to a person instead of failing.",
+   "fieldname": "daily_token_budget",
+   "fieldtype": "Int",
+   "label": "Daily Token Budget"
+  },
+  {
+   "fieldname": "column_break_efficiency",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "budget_status_html",
+   "fieldtype": "HTML",
+   "label": "Usage"
   },
   {
    "fieldname": "vision_section",
@@ -1059,7 +1102,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-25 16:00:00.000000",
+ "modified": "2026-08-25 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Settings",

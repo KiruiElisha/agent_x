@@ -27,6 +27,7 @@ def run() -> dict:
 	results += connection(settings)
 	results += webhook(settings)
 	results += traffic(settings)
+	results += model_usage(settings)
 	results += recent_errors()
 
 	failed = [r for r in results if r["ok"] is False]
@@ -309,6 +310,58 @@ def traffic(settings) -> list:
 					_("Set Acts As User on each allowed number, or turn off Only Act for Mapped Numbers."),
 				)
 			)
+
+	return out
+
+
+def model_usage(settings) -> list:
+	"""Where the quota is going, and what is being saved."""
+	from agent_x.agent.runtime import tokens_used_today
+
+	try:
+		today = tokens_used_today()
+	except Exception:
+		return []
+
+	budget = settings.daily_token_budget or 0
+	out = [
+		check(
+			"Model tokens used today",
+			None if not budget else today < budget,
+			f"{today:,}" + (f" of {budget:,}" if budget else " (no budget set)"),
+			_("Raise the Daily Token Budget, or add reply rules for common questions."),
+		)
+	]
+
+	runs = frappe.db.count("Agent Run", {"creation": (">", frappe.utils.today())})
+	if runs:
+		out.append(
+			check("Average per conversation turn", None, f"{today // runs:,} tokens over {runs} turns")
+		)
+
+	try:
+		saved = frappe.db.sql(
+			"SELECT COALESCE(SUM(tokens_saved), 0), COALESCE(SUM(times_used), 0) "
+			"FROM `tabWhatsApp Reply Rule` WHERE enabled = 1"
+		)[0]
+		if saved[1]:
+			out.append(
+				check(
+					"Answered without the model",
+					True,
+					_("{0} messages, about {1} tokens not spent").format(f"{saved[1]:,}", f"{saved[0]:,}"),
+				)
+			)
+		else:
+			out.append(
+				check(
+					"Reply rules in use",
+					None,
+					_("None yet. A rule for greetings and opening hours removes the most common calls."),
+				)
+			)
+	except Exception:
+		pass
 
 	return out
 

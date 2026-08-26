@@ -17,9 +17,21 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "All Documents",
-   "link_count": 4,
+   "link_count": 5,
    "onboard": 0,
    "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "zap",
+   "is_query_report": 0,
+   "label": "WhatsApp Reply Rule",
+   "link_count": 0,
+   "link_to": "WhatsApp Reply Rule",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   },
   {
    "dependencies": "",
@@ -70,7 +82,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-08-24 00:00:00.000000",
+ "modified": "2026-08-25 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Automation",

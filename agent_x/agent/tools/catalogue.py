@@ -386,9 +386,23 @@ def match_items(ctx, requests: list | str, limit_per_line: int = 3) -> dict:
 		)
 		shortlist = [r for r in scored if r["_score"] >= FLOOR][:limit_per_line]
 
-		options = decorate(ctx, shortlist, settings)
-		for option, row in zip(options, shortlist):
-			option["confidence"] = round(row["_score"], 2)
+		# Only what is needed to choose between options. A description and a
+		# group on every candidate tripled the size of this result, and the
+		# whole result is carried into every later call in the same message.
+		options = []
+		for option, row in zip(decorate(ctx, shortlist, settings), shortlist):
+			trimmed = {
+				"item_code": option["item_code"],
+				"item_name": option.get("item_name"),
+				"confidence": round(row["_score"], 2),
+			}
+			if option.get("price") is not None:
+				trimmed["price"] = option["price"]
+			if option.get("in_stock") is not None:
+				trimmed["in_stock"] = option["in_stock"]
+			if option.get("note"):
+				trimmed["note"] = option["note"]
+			options.append(trimmed)
 
 		best = options[0] if options else None
 		results.append(

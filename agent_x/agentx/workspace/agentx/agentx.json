@@ -1,0 +1,238 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"get_started\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Get Started</b></span>\", \"col\": 12}}, {\"id\": \"sc_settings\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Settings\", \"col\": 3}}, {\"id\": \"sc_sessions\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sessions\", \"col\": 3}}, {\"id\": \"sc_rules\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Reply Rules\", \"col\": 3}}, {\"id\": \"sp1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"needs_you\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Needs You</b></span>\", \"col\": 12}}, {\"id\": \"sc_approval\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Needs Approval\", \"col\": 3}}, {\"id\": \"sc_waiting\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Waiting on a Person\", \"col\": 3}}, {\"id\": \"sc_failed\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Failed Actions\", \"col\": 3}}, {\"id\": \"sp2\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"everything\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Everything</b></span>\", \"col\": 12}}, {\"id\": \"card_conversations\", \"type\": \"card\", \"data\": {\"card_name\": \"Conversations\", \"col\": 4}}, {\"id\": \"card_automation\", \"type\": \"card\", \"data\": {\"card_name\": \"Automation\", \"col\": 4}}, {\"id\": \"card_setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
+ "creation": "2026-08-23 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "message",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "AgentX",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Conversations",
+   "link_count": 3,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "message",
+   "is_query_report": 0,
+   "label": "WhatsApp Message",
+   "link_count": 0,
+   "link_to": "WhatsApp Message",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "customer",
+   "is_query_report": 0,
+   "label": "WhatsApp Contact",
+   "link_count": 0,
+   "link_to": "WhatsApp Contact",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "comment",
+   "is_query_report": 0,
+   "label": "Agent Conversation",
+   "link_count": 0,
+   "link_to": "Agent Conversation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Automation",
+   "link_count": 5,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "tool",
+   "is_query_report": 0,
+   "label": "WhatsApp Reply Rule",
+   "link_count": 0,
+   "link_to": "WhatsApp Reply Rule",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "notification",
+   "is_query_report": 0,
+   "label": "WhatsApp Alert",
+   "link_count": 0,
+   "link_to": "WhatsApp Alert",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "permission",
+   "is_query_report": 0,
+   "label": "Agent Action",
+   "link_count": 0,
+   "link_to": "Agent Action",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "list-alt",
+   "is_query_report": 0,
+   "label": "Agent Run",
+   "link_count": 0,
+   "link_to": "Agent Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "edit",
+   "is_query_report": 0,
+   "label": "Agent Correction",
+   "link_count": 0,
+   "link_to": "Agent Correction",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setup",
+   "link_count": 3,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "setting-gear",
+   "is_query_report": 0,
+   "label": "AgentX Settings",
+   "link_count": 0,
+   "link_to": "AgentX Settings",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "integration",
+   "is_query_report": 0,
+   "label": "WhatsApp Session",
+   "link_count": 0,
+   "link_to": "WhatsApp Session",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "icon": "education",
+   "is_query_report": 0,
+   "label": "Agent Knowledge",
+   "link_count": 0,
+   "link_to": "Agent Knowledge",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-25 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AgentX",
+ "name": "AgentX",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "icon": "setting-gear",
+   "label": "Settings",
+   "link_to": "AgentX Settings",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "icon": "integration",
+   "label": "Sessions",
+   "link_to": "WhatsApp Session",
+   "type": "DocType"
+  },
+  {
+   "color": "Cyan",
+   "doc_view": "",
+   "icon": "tool",
+   "label": "Reply Rules",
+   "link_to": "WhatsApp Reply Rule",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "",
+   "icon": "permission",
+   "label": "Needs Approval",
+   "link_to": "Agent Action",
+   "stats_filter": "{\"status\": \"Pending\"}",
+   "type": "DocType"
+  },
+  {
+   "color": "Yellow",
+   "doc_view": "",
+   "icon": "solid-warning",
+   "label": "Waiting on a Person",
+   "link_to": "Agent Conversation",
+   "stats_filter": "{\"status\": \"Handed Over\"}",
+   "type": "DocType"
+  },
+  {
+   "color": "Red",
+   "doc_view": "",
+   "icon": "solid-error",
+   "label": "Failed Actions",
+   "link_to": "Agent Action",
+   "stats_filter": "{\"status\": \"Failed\"}",
+   "type": "DocType"
+  }
+ ],
+ "title": "AgentX"
+}

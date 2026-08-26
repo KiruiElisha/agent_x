@@ -132,9 +132,21 @@ def get_document(ctx: ToolContext, doctype: str, name: str, fields: list[str] | 
 	if fields:
 		safe_fields(doctype, fields)  # rejects unknown or secret field names
 
-	trimmed = {k: v for k, v in data.items() if k in selected or k in ("name", "docstatus")}
+	# An unset field tells the model nothing and costs the same as a set one.
+	# A whole Sales Order was 1,830 tokens, most of it nulls and zeroes.
+	trimmed = {
+		key: value
+		for key, value in data.items()
+		if (key in selected or key in ("name", "docstatus"))
+		and value not in (None, "", [], {})
+	}
 
-	return {"found": True, "doctype": doctype, "name": name, "document": frappe.parse_json(frappe.as_json(trimmed))}
+	return {
+		"found": True,
+		"doctype": doctype,
+		"name": name,
+		"document": frappe.parse_json(frappe.as_json(trimmed)),
+	}
 
 
 def count_documents(ctx: ToolContext, doctype: str, filters: dict | None = None) -> dict:
@@ -155,17 +167,24 @@ LAYOUT_FIELDTYPES = ("Section Break", "Column Break", "Tab Break", "HTML", "Butt
 def field_summary(field) -> dict:
 	entry = {
 		"fieldname": field.fieldname,
-		"label": field.label,
 		"fieldtype": field.fieldtype,
-		"required": bool(field.reqd),
 	}
+
+	# A label that is just the fieldname prettified tells the model nothing it
+	# cannot already see, and every field pays for it.
+	label = (field.label or "").strip()
+	if label and label.lower().replace(" ", "_") != field.fieldname:
+		entry["label"] = label
+
+	if field.reqd:
+		entry["required"] = True
 
 	if field.fieldtype in ("Link", "Table", "Table MultiSelect"):
 		entry["options"] = field.options
 	elif field.fieldtype == "Select" and field.options:
 		entry["choices"] = [o for o in field.options.split("\n") if o]
 
-	if field.default:
+	if field.default and not str(field.default).startswith(":"):
 		entry["default"] = field.default
 
 	return entry
@@ -181,62 +200,125 @@ def usable_fields(meta) -> list:
 	]
 
 
+# A doctype like Sales Order has 123 usable fields. Describing all of them cost
+# 5,875 tokens, and the result was then truncated mid-list, which lost nine of
+# the twelve required fields including the order lines themselves. The model was
+# doing better guessing than reading. So: only what someone could actually fill
+# in, required first so truncation can never reach them, and a hard cap.
+MAX_FIELDS = 25
+MAX_CHILD_FIELDS = 10
+
+# Fields nobody sets by hand: computed, fetched from a link, or set on save.
+def settable(field) -> bool:
+	if field.read_only or field.hidden:
+		return False
+	if getattr(field, "is_virtual", 0):
+		return False
+	if field.fetch_from:
+		# Filled in from a linked document.
+		return False
+	if field.fieldtype in LAYOUT_FIELDTYPES or field.fieldtype in SENSITIVE_FIELDTYPES:
+		return False
+	if field.fieldname in HIDDEN_FIELDS:
+		return False
+	return True
+
+
+def by_importance(fields: list) -> list:
+	"""Required first, then what the grid shows, then the rest."""
+	def rank(field):
+		if field.reqd:
+			return 0
+		if field.in_list_view:
+			return 1
+		if field.bold or field.fieldtype in ("Link", "Select", "Date", "Datetime"):
+			return 2
+		return 3
+
+	return sorted(fields, key=lambda f: (rank(f), f.idx or 0))
+
+
 def describe_child_table(child_doctype: str) -> dict:
 	"""What one row of a child table needs.
 
 	Without this the model can see that Sales Order has an `items` table but has
 	no way to learn a row needs `item_code` and `qty`, and a child doctype is
 	never in the policy list because nobody grants permissions on one directly.
-	Only the fields someone would actually fill in are listed, since a child
-	table can carry a hundred computed columns.
 	"""
 	meta = frappe.get_meta(child_doctype)
-	fields = usable_fields(meta)
+	usable = [f for f in meta.fields if settable(f)]
 
-	# Required first, then the columns the grid shows, which is what a human
-	# would type. Everything else is almost always derived on save.
 	keep, seen = [], set()
-	for field in fields:
-		if field.reqd or field.in_list_view:
-			if field.fieldname not in seen:
-				seen.add(field.fieldname)
-				keep.append(field_summary(field))
+	for field in by_importance(usable):
+		if not (field.reqd or field.in_list_view):
+			continue
+		if field.fieldname in seen:
+			continue
+		seen.add(field.fieldname)
+		keep.append(field_summary(field))
+		if len(keep) >= MAX_CHILD_FIELDS:
+			break
 
 	return {"doctype": child_doctype, "fields": keep}
 
 
 def describe_doctype(ctx: ToolContext, doctype: str) -> dict:
-	"""What fields a doctype has, so the model can fill one in correctly."""
+	"""What fields a doctype has, so the model can fill one in correctly.
+
+	Deliberately partial. Everything the system fills in itself is left out, and
+	what remains is ordered so the required fields are never the ones cut.
+	"""
 	policy.check(ctx.settings, doctype, "read", ctx.acting_user).raise_if_denied()
 
 	meta = frappe.get_meta(doctype)
-	fields, tables = [], {}
+	usable = [f for f in meta.fields if settable(f)]
+	ordered = by_importance(usable)
 
-	for field in usable_fields(meta):
+	fields, tables, omitted = [], {}, 0
+
+	for field in ordered:
+		# Line tables are the point of an order, so they are never dropped.
+		is_table = field.fieldtype in ("Table", "Table MultiSelect")
+
+		if len(fields) >= MAX_FIELDS and not (field.reqd or is_table):
+			omitted += 1
+			continue
+
 		fields.append(field_summary(field))
 
-		# Expand child tables inline; the model cannot ask about them separately.
-		if field.fieldtype in ("Table", "Table MultiSelect") and field.options:
-			if field.options not in tables:
-				try:
-					tables[field.options] = describe_child_table(field.options)
-				except Exception:
-					frappe.log_error(
-						frappe.get_traceback(), f"AgentX: could not describe {field.options}"
-					)
+		# Sales Order has seven child tables and only one of them is the order.
+		# Expanding all of them was most of what pushed this past the size the
+		# conversation can carry, so only the tables somebody actually fills in
+		# are described.
+		if is_table and field.options and field.options not in tables:
+			if not (field.reqd or len(tables) < 1):
+				continue
+			try:
+				tables[field.options] = describe_child_table(field.options)
+			except Exception:
+				frappe.log_error(
+					frappe.get_traceback(), f"AgentX: could not describe {field.options}"
+				)
 
-	return {
+	result = {
 		"doctype": doctype,
 		"is_submittable": bool(meta.is_submittable),
 		"title_field": meta.title_field,
 		"fields": fields,
 		"child_tables": list(tables.values()),
 		"note": _(
-			"Fields marked required must be set unless the system fills them in. "
-			"Send a child table as a list of objects, e.g. "
-			'"items": [{"item_code": "ITEM-001", "qty": 2}].'
+			"Required fields must be set unless the system fills them in. Send a child table "
+			'as a list of objects, e.g. "items": [{"item_code": "ITEM-001", "qty": 2}]. '
+			"Fields the system computes or fetches are not listed; do not invent them."
 		),
 	}
+
+	if omitted:
+		result["note"] += " " + _(
+			"{0} less common fields were left out. Ask for them by name if you need one."
+		).format(omitted)
+
+	return result
 
 
 def find_doctypes(ctx: ToolContext, query: str, limit: int = 10) -> dict:
@@ -245,7 +327,7 @@ def find_doctypes(ctx: ToolContext, query: str, limit: int = 10) -> dict:
 	Only reachable in All Documents mode, where the model is not given a fixed
 	list and would otherwise have to guess at names.
 	"""
-	from agent_x.agent import policy
+	from agent_x.agent import policy as policy_module
 
 	if (ctx.settings.policy_mode or "Listed Documents Only") != "All Documents":
 		return {"error": _("Ask about the document types you were told about.")}
@@ -264,13 +346,10 @@ def find_doctypes(ctx: ToolContext, query: str, limit: int = 10) -> dict:
 
 	found = []
 	for row in rows:
-		if not policy.is_automatable(row.name):
+		if not policy_module.is_automatable(row.name):
 			continue
-
-		# Only offer what this user could actually read.
-		if not policy.has_permission_as(ctx.acting_user, row.name, "read", None):
+		if not policy_module.has_permission_as(ctx.acting_user, row.name, "read", None):
 			continue
-
 		found.append(
 			{"doctype": row.name, "module": row.module, "submittable": bool(row.is_submittable)}
 		)

@@ -1,0 +1,7 @@
+# These run on Linux. A CRLF checkout on Windows would break them with
+# "bash\r: not found" once copied to a server.
+*.sh text eol=lf
+bridgectl text eol=lf
+Dockerfile text eol=lf
+deploy/* text eol=lf
+.env.example text eol=lf

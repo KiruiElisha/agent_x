@@ -11,17 +11,20 @@ put it is the only real deployment decision, and AgentX supports both answers.
 
 | | **WaClient** | **Self-hosted bridge** |
 | --- | --- | --- |
-| Works on Frappe Cloud | **Yes** | No |
-| Extra infrastructure | None | A server running Node |
+| Works on Frappe Cloud | **Yes** | Yes, with the bridge on a server of yours |
+| Extra infrastructure | None | A small server; one command installs it |
 | Who holds the session | WaClient | You |
 | Who can read messages | WaClient | Only you |
 | Cost | Their subscription | A small VPS |
 | QR scanned in Desk | Yes | Yes |
 
-**On Frappe Cloud, use WaClient.** There is nowhere on a managed bench to run a
-persistent process, so the session has to be hosted. Everything else — the
-agent, the policy gate, the audit trail, the QR in Desk — is identical either
-way, and switching later is a dropdown in AgentX Settings, not a rewrite.
+**On Frappe Cloud, the session cannot live on the bench itself**, because a
+managed bench has nowhere to run a persistent process. Either let WaClient host
+it, or run the bridge on a small server of your own with a domain name, so
+Frappe Cloud can reach it over HTTPS; see [bridge/README.md](bridge/README.md).
+Everything else — the agent, the policy gate, the audit trail, the QR in Desk —
+is identical either way, and switching later is a dropdown in AgentX Settings,
+not a rewrite.
 
 ```
                   ┌── WaClient (hosted)  ──┐
@@ -47,10 +50,17 @@ dashboard and note its Instance ID. A Webhook Token is generated when you
 save; press **Register Webhook** so WaClient sends it. Without a token every
 inbound event is refused.
 
-**Self-hosted bridge** — see [bridge/README.md](bridge/README.md), then fill in
-the Bridge URL, API Token, and Webhook Secret. Copy the read-only **Webhook
-URL** into the bridge's `BRIDGE_WEBHOOK_URL` and restart it. The Webhook Secret
-must match `BRIDGE_WEBHOOK_SECRET`; unsigned events are refused.
+**Self-hosted bridge** — on the server that will run it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KiruiElisha/agent_x/main/bridge/install.sh \
+  | sudo bash -s -- --site https://<your-site> [--domain bridge.example.com]
+```
+
+It prints the Bridge URL, API Token, and Webhook Secret to fill in here; see
+[bridge/README.md](bridge/README.md) for the options. `--site` must be the same
+address as the read-only **Webhook URL** here, minus its path. Unsigned events
+are refused, so the Webhook Secret has to match the bridge's exactly.
 
 Press **Test Connection** either way.
 

@@ -1,0 +1,64 @@
+# AgentX WhatsApp bridge.
+#
+# Settings come from .env next to this file; ./install.sh writes it for you.
+#
+#   docker compose up -d                 bridge only, on 127.0.0.1:8787
+#   COMPOSE_PROFILES=https in .env       adds Caddy, serving BRIDGE_DOMAIN over
+#                                        HTTPS with automatic certificates
+
+name: agentx-bridge
+
+services:
+  bridge:
+    build: .
+    image: agentx-bridge:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Fixed inside the container, whatever .env says: the container listens
+      # on all its interfaces, and the port mapping below decides who can reach it.
+      BRIDGE_HOST: 0.0.0.0
+      BRIDGE_PORT: 8787
+      BRIDGE_SESSION_DIR: /data/sessions
+    ports:
+      # Loopback only. A Frappe bench on this same server reaches it here;
+      # anything further away goes through Caddy.
+      - "127.0.0.1:${BRIDGE_PORT:-8787}:8787"
+    volumes:
+      - sessions:/data
+    extra_hosts:
+      # Lets BRIDGE_WEBHOOK_URL point at a Frappe site on this same host:
+      # http://host.docker.internal:8000/api/method/agent_x.core.webhook.receive
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - bridge
+    environment:
+      # Not ${VAR:?}: Compose interpolates the whole file even when this
+      # profile is off, and that would break installs without a domain.
+      BRIDGE_DOMAIN: ${BRIDGE_DOMAIN:-}
+      # Everyone, unless .env narrows it to the Frappe server's addresses.
+      BRIDGE_ALLOWED_IPS: ${BRIDGE_ALLOWED_IPS:-0.0.0.0/0 ::/0}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  # The WhatsApp login. Losing it means scanning the QR again.
+  sessions:
+  caddy_data:
+  caddy_config:

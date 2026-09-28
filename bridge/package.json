@@ -4,10 +4,10 @@
   "description": "Baileys WhatsApp Web bridge for the AgentX Frappe app",
   "type": "module",
   "main": "src/index.js",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20.9" },
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "start": "node --env-file=.env src/index.js",
+    "dev": "node --env-file=.env --watch src/index.js"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",

@@ -1,0 +1,31 @@
+# Template for native installs. install.sh fills in the @...@ values and
+# writes the result to /etc/systemd/system/agentx-bridge.service.
+
+[Unit]
+Description=AgentX WhatsApp bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@DIR@
+EnvironmentFile=@DIR@/.env
+Environment=NODE_ENV=production
+ExecStart=@NODE@ src/index.js
+
+# A crash exits on purpose so a clean process takes over; the login on disk
+# means it reconnects without a new QR.
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# It needs its own directory and the network, nothing more.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

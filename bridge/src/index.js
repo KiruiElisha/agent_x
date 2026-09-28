@@ -22,7 +22,8 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 
 const server = app.listen(config.port, config.host, async () => {
 	logger.info({ host: config.host, port: config.port }, "bridge listening");
-	if (!LOOPBACK.has(config.host)) {
+	// In a container 0.0.0.0 is required, and the port mapping decides exposure.
+	if (!LOOPBACK.has(config.host) && !process.env.BRIDGE_IN_CONTAINER) {
 		// Anyone who can reach this port and guess the token can send from the
 		// linked number. Put it behind a firewall or a TLS proxy.
 		logger.warn({ host: config.host }, "bridge is listening beyond loopback");

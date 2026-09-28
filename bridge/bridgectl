@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+# Day-to-day commands for an installed AgentX bridge.
+#
+# install.sh links this as /usr/local/bin/agentx-bridge, so from anywhere:
+#
+#   agentx-bridge status | logs | restart | stop | start | config | backup | update
+
+set -euo pipefail
+
+DIR=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+cd "$DIR"
+
+MODE=$(cat .install-mode 2>/dev/null || echo docker)
+SERVICE=agentx-bridge
+ENV_FILE="$DIR/.env"
+
+env_get() {
+	[ -f "$ENV_FILE" ] || return 0
+	grep -E "^$1=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
+}
+
+PORT=$(env_get BRIDGE_PORT)
+PORT=${PORT:-8787}
+
+usage() {
+	cat <<EOF
+Usage: agentx-bridge <command>
+
+  status            Is it running, and which WhatsApp sessions are linked
+  logs [N] [svc]    Follow the last N log lines (default 200). svc is
+                    bridge (default) or caddy. Add --no-follow to just print.
+  restart           Restart, picking up changes to .env
+  stop | start      Stop or start the bridge
+  config            Print the values to paste into AgentX Settings
+  backup            Save the WhatsApp login to a .tgz, so a new server
+                    does not need the QR scanned again
+  restore FILE      Put a backup back, replacing the current login
+  update            Pull the latest code and reinstall, keeping all settings
+
+Installed in $DIR ($MODE mode).
+EOF
+}
+
+need_root() {
+	[ "$(id -u)" -eq 0 ] || {
+		echo "Run this as root: sudo agentx-bridge $*" >&2
+		exit 1
+	}
+}
+
+compose() { docker compose --project-directory "$DIR" "$@"; }
+
+cmd=${1:-help}
+shift || true
+
+case "$cmd" in
+	status)
+		if [ "$MODE" = docker ]; then
+			compose ps
+		else
+			systemctl --no-pager status "$SERVICE" 2>&1 | head -n 5 || true
+		fi
+		echo
+		if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+			echo "Health: ok"
+			curl -fsS -H "Authorization: Bearer $(env_get BRIDGE_API_TOKEN)" \
+				"http://127.0.0.1:$PORT/api/sessions" || true
+			echo
+		else
+			echo "Health: not answering on 127.0.0.1:$PORT"
+			exit 1
+		fi
+		;;
+
+	logs)
+		lines=200 svc=bridge follow=1
+		for arg in "$@"; do
+			case "$arg" in
+				--no-follow) follow=0 ;;
+				'' | *[!0-9]*) svc=$arg ;;
+				*) lines=$arg ;;
+			esac
+		done
+		if [ "$MODE" = docker ]; then
+			if [ "$follow" -eq 1 ]; then
+				compose logs -f --tail="$lines" "$svc"
+			else
+				compose logs --tail="$lines" "$svc"
+			fi
+		else
+			[ "$svc" = bridge ] || { echo "Native installs have no $svc service." >&2; exit 1; }
+			if [ "$follow" -eq 1 ]; then
+				journalctl -u "$SERVICE" -f -n "$lines"
+			else
+				journalctl -u "$SERVICE" --no-pager -n "$lines"
+			fi
+		fi
+		;;
+
+	restart)
+		need_root restart
+		if [ "$MODE" = docker ]; then
+			# Recreate rather than restart, so edits to .env take effect.
+			compose up -d --force-recreate
+		else
+			systemctl restart "$SERVICE"
+		fi
+		echo "Restarted."
+		;;
+
+	stop)
+		need_root stop
+		if [ "$MODE" = docker ]; then compose stop; else systemctl stop "$SERVICE"; fi
+		;;
+
+	start)
+		need_root start
+		if [ "$MODE" = docker ]; then compose up -d; else systemctl start "$SERVICE"; fi
+		;;
+
+	config)
+		domain=$(env_get BRIDGE_DOMAIN)
+		if [ "$MODE" = docker ] && [ -n "$domain" ]; then
+			url="https://$domain"
+		else
+			url="http://127.0.0.1:$PORT"
+		fi
+		cat <<EOF
+AgentX Settings → Connection
+
+  WhatsApp Provider   Self-Hosted Bridge
+  Bridge URL          $url
+  Bridge API Token    $(env_get BRIDGE_API_TOKEN)
+  Webhook Secret      $(env_get BRIDGE_WEBHOOK_SECRET)
+
+Messages are delivered to: $(env_get BRIDGE_WEBHOOK_URL)
+EOF
+		;;
+
+	backup)
+		need_root backup
+		out="$DIR/sessions-backup-$(date +%Y%m%d-%H%M%S).tgz"
+		umask 077
+		if [ "$MODE" = docker ]; then
+			# Straight from the running container's volume.
+			compose exec -T bridge tar czf - -C /data sessions >"$out"
+		else
+			sessions=$(env_get BRIDGE_SESSION_DIR)
+			tar czf "$out" -C "$DIR" "${sessions:-./sessions}"
+		fi
+		echo "Saved $out"
+		echo "It holds the WhatsApp login: whoever has it can use the number. Keep it safe."
+		;;
+
+	restore)
+		need_root restore
+		file=${1:?Usage: agentx-bridge restore sessions-backup-....tgz}
+		file=$(readlink -f "$file")
+		[ -f "$file" ] || { echo "No such file: $file" >&2; exit 1; }
+
+		echo "This replaces the WhatsApp login currently on this server."
+		read -r -p "Continue? [y/N] " reply
+		case "$reply" in [yY]*) ;; *) echo "Nothing changed."; exit 0 ;; esac
+
+		if [ "$MODE" = docker ]; then
+			compose stop bridge
+			compose run --rm --no-deps -T --entrypoint sh bridge \
+				-c 'rm -rf /data/sessions && tar xzf - -C /data' <"$file"
+			compose up -d
+		else
+			sessions=$(env_get BRIDGE_SESSION_DIR)
+			sessions=$(realpath -m "$DIR/${sessions:-./sessions}")
+			owner=$(stat -c %U "$DIR")
+			systemctl stop "$SERVICE"
+			rm -rf "$sessions"
+			mkdir -p "$(dirname "$sessions")"
+			# Backups hold the directory under its own name; restore it under ours.
+			tmp=$(mktemp -d)
+			tar xzf "$file" -C "$tmp"
+			mv "$tmp"/*/ "$sessions" 2>/dev/null || mv "$tmp/sessions" "$sessions"
+			rm -rf "$tmp"
+			chown -R "$owner:" "$sessions"
+			systemctl start "$SERVICE"
+		fi
+		echo "Restored. Check it with: agentx-bridge status"
+		;;
+
+	update)
+		need_root update
+		if git -C "$DIR" rev-parse --git-dir >/dev/null 2>&1; then
+			# The clone may belong to another user (a bench's frappe user, say),
+			# which git refuses to touch as root unless told it is expected.
+			git -c safe.directory='*' -C "$DIR" pull --ff-only
+		fi
+		exec "$DIR/install.sh" --yes
+		;;
+
+	help | -h | --help)
+		usage
+		;;
+
+	*)
+		usage >&2
+		exit 1
+		;;
+esac

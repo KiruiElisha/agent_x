@@ -1,0 +1,14 @@
+# HTTPS in front of the bridge. Certificates are issued and renewed
+# automatically; BRIDGE_DOMAIN must already point at this server.
+
+{$BRIDGE_DOMAIN} {
+	# Only the Frappe server needs to talk to the bridge. Set
+	# BRIDGE_ALLOWED_IPS in .env to its address(es) to shut everyone else out.
+	@outsider not remote_ip {$BRIDGE_ALLOWED_IPS}
+	respond @outsider "Forbidden" 403
+
+	# QR codes and media are JSON; keep responses small.
+	encode zstd gzip
+
+	reverse_proxy bridge:8787
+}

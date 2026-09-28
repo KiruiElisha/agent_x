@@ -36,6 +36,8 @@ DEFAULTS = {
 	"log_messages": 1,
 	"log_retention_days": 90,
 	"request_timeout": 30,
+	# One sender cannot spend the daily budget for everybody.
+	"max_messages_per_hour": 30,
 	"history_limit": 12,
 	"max_tool_iterations": 6,
 	"max_reply_characters": 1500,
@@ -50,8 +52,27 @@ DEFAULTS = {
 }
 
 
+SENDER_ROLE = "AgentX Sender"
+
+
 def after_install() -> None:
 	seed_settings()
+	ensure_sender_role()
+
+
+def ensure_sender_role() -> None:
+	"""The role that may send WhatsApp messages from code or the desk.
+
+	Separate from reading the message log, so letting someone see what was said
+	does not also let them message anyone from the business number.
+	"""
+	if frappe.db.exists("Role", SENDER_ROLE):
+		return
+
+	frappe.get_doc(
+		{"doctype": "Role", "role_name": SENDER_ROLE, "desk_access": 1}
+	).insert(ignore_permissions=True)
+	frappe.db.commit()
 
 
 def seed_settings() -> None:
@@ -63,6 +84,13 @@ def seed_settings() -> None:
 	"""
 	settings = frappe.get_single("AgentX Settings")
 	changed = []
+
+	# The inbound endpoint refuses everything without a token.
+	if settings.meta.has_field("webhook_token") and not settings.get_password(
+		"webhook_token", raise_exception=False
+	):
+		settings.webhook_token = frappe.generate_hash(length=40)
+		changed.append("webhook_token")
 
 	for field, value in DEFAULTS.items():
 		if not settings.meta.has_field(field):

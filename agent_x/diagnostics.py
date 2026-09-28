@@ -85,12 +85,26 @@ def credentials(settings) -> list:
 				fix=_("Copy your WaClient access token into AgentX Settings."),
 			)
 		)
+		out.append(
+			check(
+				"Webhook token set",
+				bool(settings.get_password("webhook_token", raise_exception=False)),
+				fix=_("Save AgentX Settings to generate one, then press Register Webhook."),
+			)
+		)
 	else:
 		out.append(check("Bridge URL set", bool(settings.bridge_url), settings.bridge_url or ""))
 		out.append(
 			check(
 				"Bridge token set",
 				bool(settings.get_password("bridge_api_token", raise_exception=False)),
+			)
+		)
+		out.append(
+			check(
+				"Webhook secret set",
+				bool(settings.get_password("webhook_secret", raise_exception=False)),
+				fix=_("Set it to the same value as BRIDGE_WEBHOOK_SECRET, or inbound events are refused."),
 			)
 		)
 

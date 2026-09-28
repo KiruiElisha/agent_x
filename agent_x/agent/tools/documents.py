@@ -5,6 +5,8 @@ here directly: they go through an Agent Action, which is what actually applies
 permissions and records the audit trail.
 """
 
+import re
+
 import frappe
 from frappe import _
 
@@ -16,6 +18,9 @@ SENSITIVE_FIELDTYPES = {"Password"}
 HIDDEN_FIELDS = {"api_key", "api_secret", "password", "salt", "reset_password_key"}
 
 MAX_ROWS = 20
+
+# Past this a count is reported as "at least", so counting stays cheap.
+COUNT_CAP = 10000
 
 
 class ToolContext:
@@ -82,6 +87,56 @@ def safe_fields(doctype: str, requested: list[str] | None) -> list[str]:
 	return requested
 
 
+def filter_fieldnames(doctype: str, filters) -> list[tuple[str, str]]:
+	"""Every (doctype, fieldname) a filter refers to, in any shape Frappe accepts."""
+	if not filters:
+		return []
+
+	if isinstance(filters, dict):
+		return [(doctype, str(key)) for key in filters]
+
+	found = []
+	for entry in filters:
+		if not isinstance(entry, list | tuple) or len(entry) < 3:
+			frappe.throw(_("Each filter must be [field, operator, value]."))
+		if len(entry) >= 4:
+			# [child doctype, field, operator, value]
+			found.append((str(entry[0] or doctype), str(entry[1])))
+		else:
+			found.append((doctype, str(entry[0])))
+	return found
+
+
+def check_filters(doctype: str, filters) -> None:
+	"""Refuse a filter on a field the assistant may not read.
+
+	A filter is an oracle: `api_key like 'a%'` answers yes or no, one character
+	at a time, even when the field itself is never returned.
+	"""
+	for target, fieldname in filter_fieldnames(doctype, filters):
+		if fieldname not in readable_fields(target):
+			frappe.throw(
+				_("Cannot filter {0} on {1}: the field does not exist or cannot be read.").format(
+					target, fieldname
+				)
+			)
+
+
+ORDER_BY = re.compile(r"^\s*`?(\w+)`?(?:\s+(asc|desc))?\s*$", re.IGNORECASE)
+
+
+def safe_order_by(doctype: str, order_by: str | None) -> str:
+	"""One readable field and a direction; anything else is refused."""
+	if not order_by:
+		return "modified desc"
+
+	match = ORDER_BY.match(order_by)
+	if not match or match.group(1) not in readable_fields(doctype):
+		frappe.throw(_("Sort by a single readable field, like 'modified desc'."))
+
+	return f"{match.group(1)} {(match.group(2) or 'asc').lower()}"
+
+
 # ---------------------------------------------------------------------- reading
 
 
@@ -98,17 +153,20 @@ def list_documents(
 
 	limit = max(1, min(int(limit or 10), MAX_ROWS))
 	selected = safe_fields(doctype, fields)
+	check_filters(doctype, filters)
+	ordering = safe_order_by(doctype, order_by)
 
 	from agent_x.agentx.doctype.agent_action.agent_action import switch_user
 
-	# get_all applies permissions and user permissions for the running user.
+	# get_list, not get_all: get_all ignores permissions whoever is logged in,
+	# so user permissions and "only if creator" rules would not apply.
 	with switch_user(ctx.acting_user):
-		rows = frappe.get_all(
+		rows = frappe.get_list(
 			doctype,
 			filters=filters or None,
 			fields=selected,
 			limit=limit,
-			order_by=order_by or "modified desc",
+			order_by=ordering,
 		)
 
 	return {"doctype": doctype, "count": len(rows), "documents": rows}
@@ -152,13 +210,19 @@ def get_document(ctx: ToolContext, doctype: str, name: str, fields: list[str] | 
 def count_documents(ctx: ToolContext, doctype: str, filters: dict | None = None) -> dict:
 	"""How many documents match."""
 	policy.check(ctx.settings, doctype, "read", ctx.acting_user).raise_if_denied()
+	check_filters(doctype, filters)
 
 	from agent_x.agentx.doctype.agent_action.agent_action import switch_user
 
+	# frappe.db.count checks no permissions at all, so count what get_list lets
+	# this user see. Plucking names is cheap, and the cap keeps it that way.
 	with switch_user(ctx.acting_user):
-		total = frappe.db.count(doctype, filters or None)
+		names = frappe.get_list(doctype, filters=filters or None, pluck="name", limit=COUNT_CAP + 1)
 
-	return {"doctype": doctype, "count": total}
+	if len(names) > COUNT_CAP:
+		return {"doctype": doctype, "count": COUNT_CAP, "at_least": True}
+
+	return {"doctype": doctype, "count": len(names)}
 
 
 LAYOUT_FIELDTYPES = ("Section Break", "Column Break", "Tab Break", "HTML", "Button", "Fold")

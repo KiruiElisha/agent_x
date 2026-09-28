@@ -90,6 +90,84 @@ export function buildRouter(manager) {
 		}),
 	);
 
+	router.get(
+		"/sessions/:id/catalog",
+		wrap(async (req, res) => {
+			const session = manager.get(req.params.id);
+			if (!session) return res.status(404).json({ ok: false, error: "unknown session" });
+
+			const { jid, limit, cursor } = req.query;
+			const products = await session.getCatalog(jid, {
+				limit: limit ? Number(limit) : undefined,
+				cursor,
+			});
+			return res.json({ ok: true, products });
+		}),
+	);
+
+	router.get(
+		"/sessions/:id/collections",
+		wrap(async (req, res) => {
+			const session = manager.get(req.params.id);
+			if (!session) return res.status(404).json({ ok: false, error: "unknown session" });
+
+			const { jid, limit } = req.query;
+			const collections = await session.getCollections(jid, limit ? Number(limit) : undefined);
+			return res.json({ ok: true, collections });
+		}),
+	);
+
+	router.post(
+		"/sessions/:id/products",
+		wrap(async (req, res) => {
+			const session = manager.get(req.params.id);
+			if (!session) return res.status(404).json({ ok: false, error: "unknown session" });
+
+			const product = await session.createProduct(req.body || {});
+			return res.json({ ok: true, product });
+		}),
+	);
+
+	router.patch(
+		"/sessions/:id/products/:productId",
+		wrap(async (req, res) => {
+			const session = manager.get(req.params.id);
+			if (!session) return res.status(404).json({ ok: false, error: "unknown session" });
+
+			const product = await session.updateProduct(req.params.productId, req.body || {});
+			return res.json({ ok: true, product });
+		}),
+	);
+
+	router.delete(
+		"/sessions/:id/products",
+		wrap(async (req, res) => {
+			const session = manager.get(req.params.id);
+			if (!session) return res.status(404).json({ ok: false, error: "unknown session" });
+
+			const { productIds } = req.body || {};
+			if (!Array.isArray(productIds) || !productIds.length) {
+				return res.status(400).json({ ok: false, error: "productIds must be a non-empty array" });
+			}
+
+			return res.json({ ok: true, ...(await session.deleteProducts(productIds)) });
+		}),
+	);
+
+	router.get(
+		"/sessions/:id/orders/:orderId",
+		wrap(async (req, res) => {
+			const session = manager.get(req.params.id);
+			if (!session) return res.status(404).json({ ok: false, error: "unknown session" });
+
+			const { token } = req.query;
+			if (!token) return res.status(400).json({ ok: false, error: "token is required" });
+
+			const order = await session.getOrderDetails(req.params.orderId, token);
+			return res.json({ ok: true, order });
+		}),
+	);
+
 	router.post(
 		"/sessions/:id/check",
 		wrap(async (req, res) => {

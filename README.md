@@ -43,12 +43,14 @@ bench --site <your-site> migrate
 Open **AgentX Settings → Connection** and pick one.
 
 **WaClient** — paste your Access Token. Create an instance in the WaClient
-dashboard and note its Instance ID. Set a Webhook Token (any long random
-string), save, then press **Register Webhook**.
+dashboard and note its Instance ID. A Webhook Token is generated when you
+save; press **Register Webhook** so WaClient sends it. Without a token every
+inbound event is refused.
 
 **Self-hosted bridge** — see [bridge/README.md](bridge/README.md), then fill in
 the Bridge URL, API Token, and Webhook Secret. Copy the read-only **Webhook
-URL** into the bridge's `BRIDGE_WEBHOOK_URL` and restart it.
+URL** into the bridge's `BRIDGE_WEBHOOK_URL` and restart it. The Webhook Secret
+must match `BRIDGE_WEBHOOK_SECRET`; unsigned events are refused.
 
 Press **Test Connection** either way.
 
@@ -93,8 +95,10 @@ access or hold secrets.
 
 **2. Permissions.** Every action runs as a real Frappe user, mapped from the
 sender's phone number. `frappe.set_user` swaps the identity for the duration of
-the write, so roles, user permissions, and ownership apply exactly as they would
-in Desk. Nobody gains anything over WhatsApp that they lack in the app.
+the call, and reads go through `frappe.get_list`, so roles, user permissions, and
+ownership apply exactly as they would in Desk. Nobody gains anything over
+WhatsApp that they lack in the app. Filters and sorting are limited to fields
+the assistant may read, so a filter cannot be used to probe a hidden one.
 
 **3. Confirmation.** With **Confirm Before Writing** on, the change is described
 back to the sender and waits for a clear `YES`. Anything ambiguous — including
@@ -104,6 +108,53 @@ Unanswered confirmations expire.
 Also: per-doctype daily caps, a per-conversation action limit, an optional field
 allowlist, and a **Dry Run** switch that plans and logs everything without
 writing.
+
+**Who a customer is.** A number is linked to a Customer only when that number
+is already on file for them — on a linked Contact, the Customer, or an Address.
+Someone who says *"I'm from Acme"* from an unknown number is not linked; the
+conversation is handed to a person to confirm, and the sender is told nothing
+about the account beyond the name they typed. With **Only Serve Verified
+Customers** on, a customer lookup that fails keeps strangers out rather than
+letting everyone in.
+
+## Going live
+
+The code can make a mistake unlikely. These points are about how you run it.
+
+**WhatsApp itself.** Both providers drive WhatsApp Web, not Meta's official
+Business Platform, and automating WhatsApp Web is against WhatsApp's terms.
+Numbers do get banned, and messages the business starts (Alerts) are the most
+likely trigger. Use a dedicated number, never your main line. Increase volume
+gradually. Send alerts only to people who agreed to receive them. Decide in
+advance what you will do if the number is banned.
+
+**Background workers.** Replies run in a background job, not in the webhook
+request, so a slow model never holds up the desk and a provider never times out
+waiting. That means a worker must be running: `bench worker` (supervisor runs
+it on a production bench; Frappe Cloud always has one). With no worker,
+messages are logged but never answered. Jobs for one contact run one at a time.
+
+**Webhook authentication fails closed.** WaClient needs the Webhook Token and
+the bridge needs the Webhook Secret. If either is missing, every event is
+refused and an Error Log entry says why, at most once an hour. **Verify
+Signature** can be switched off only in developer mode.
+
+**Limits to set.** **Daily Token Budget** caps model spend for the whole site.
+**Max Messages per Contact per Hour** (default 30) stops one sender from using
+it all up; messages over the limit are logged but not answered.
+
+**Sending from code** needs the **AgentX Sender** role, or System Manager.
+Read access to the message log is no longer enough.
+
+**Roll out in stages.**
+
+1. Staff only: keep **Only Allowed Numbers** and **Only Act for Mapped
+   Numbers** on, and turn on **Dry Run** for the first days.
+2. Read **Agent Run** and **Agent Action** daily. Record anything the assistant
+   got wrong as an **Agent Correction**.
+3. Before opening it to customers, turn on **Only Serve Verified Customers**,
+   give the Default Acts As User the narrowest roles that work, and keep
+   **Confirm Before Writing** on.
 
 ## Alerts: messages the system starts
 
@@ -258,7 +309,7 @@ cost an embedding call.
 ## Tests
 
 ```bash
-python3 tests/test_logic.py        # 83 tests, no site or database needed
+python3 tests/test_logic.py        # no site or database needed
 ```
 
 They stub Frappe, so the phone handling, provider payload shaping, policy gate,

@@ -28,6 +28,13 @@ function assertSafeId(id) {
 	return id;
 }
 
+/** Baileys wants a Buffer for inline bytes, or {url} for a remote fetch. */
+function toMediaUpload({ url, base64 }) {
+	if (base64) return Buffer.from(base64, "base64");
+	if (url) return { url };
+	throw new Error("Each product image needs a url or base64 content");
+}
+
 export function toJid(number) {
 	const raw = String(number || "").trim();
 	if (!raw) throw new Error("A recipient is required");
@@ -316,6 +323,40 @@ class Session {
 			{ logger: baileysLogger, reuploadRequest: this.sock.updateMediaMessage },
 		);
 		return buffer.toString("base64");
+	}
+
+	async getCatalog(jid, { limit, cursor } = {}) {
+		this.requireConnected();
+		return this.sock.getCatalog({ jid: jid || undefined, limit, cursor });
+	}
+
+	async getCollections(jid, limit) {
+		this.requireConnected();
+		return this.sock.getCollections(jid || undefined, limit);
+	}
+
+	async createProduct({ images, ...product }) {
+		this.requireConnected();
+		if (!Array.isArray(images) || !images.length) {
+			throw new Error("At least one product image is required");
+		}
+		return this.sock.productCreate({ ...product, images: images.map(toMediaUpload) });
+	}
+
+	async updateProduct(productId, { images, ...update }) {
+		this.requireConnected();
+		const payload = images ? { ...update, images: images.map(toMediaUpload) } : update;
+		return this.sock.productUpdate(productId, payload);
+	}
+
+	async deleteProducts(productIds) {
+		this.requireConnected();
+		return this.sock.productDelete(productIds);
+	}
+
+	async getOrderDetails(orderId, tokenBase64) {
+		this.requireConnected();
+		return this.sock.getOrderDetails(orderId, tokenBase64);
 	}
 
 	async checkNumber(number) {

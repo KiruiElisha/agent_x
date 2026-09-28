@@ -1564,9 +1564,9 @@ class TestVerifiedCustomersGate(unittest.TestCase):
 		# Nothing is looked up at all when it is off.
 		self.assertTrue(self.webhook.is_verified_customer(None, Off()))
 
-	def test_a_failed_lookup_does_not_lock_everyone_out(self):
-		# Failing open is right here: a broken Customer query should not silence
-		# the assistant for every customer at once.
+	def test_a_failed_lookup_keeps_strangers_out(self):
+		# The gate exists to keep strangers out, so a broken lookup must not
+		# wave everyone through. None, not False: it is not a verdict.
 		class Boom:
 			only_verified_customers = 1
 
@@ -1575,7 +1575,33 @@ class TestVerifiedCustomersGate(unittest.TestCase):
 			def wa_id(self):
 				raise RuntimeError("database is unhappy")
 
-		self.assertTrue(self.webhook.is_verified_customer(BadContact(), Boom()))
+		self.assertIsNone(self.webhook.is_verified_customer(BadContact(), Boom()))
+
+	def test_a_failed_lookup_does_not_send_the_stranger_notice(self):
+		# A real customer must not be told we have never heard of them just
+		# because the lookup broke.
+		class Settings:
+			reply_to_groups = 0
+			ai_enabled = 1
+			only_verified_customers = 1
+
+			def is_excluded(self, n):
+				return False
+
+			def is_allowed(self, n):
+				return True
+
+		class BadContact:
+			blocked = 0
+			opted_out = 0
+			wa_id = "254700111222"
+
+			@property
+			def customer(self):
+				raise RuntimeError("database is unhappy")
+
+		reason = self.webhook.should_skip(BadContact(), Settings(), is_group=False)
+		self.assertEqual(reason, "customer check failed")
 
 	def test_the_skip_reason_is_specific(self):
 		import inspect
@@ -2077,6 +2103,310 @@ class TestRuleOrderingIsCheapestFirst(unittest.TestCase):
 		source = inspect.getsource(whatsapp_reply_rule.find_match)
 		self.assertIn("if not semantic_rules:", source)
 
+
+# --------------------------------------------------------------------------
+# Production hardening.
+# --------------------------------------------------------------------------
+
+import contextlib  # noqa: E402
+import types  # noqa: E402
+
+import frappe  # noqa: E402
+
+from agent_x.agent.tools import customers as customer_tools  # noqa: E402
+from agent_x.agent.tools import documents as doc_tools  # noqa: E402
+from agent_x.core import webhook as inbound  # noqa: E402
+
+
+@contextlib.contextmanager
+def patched(target, **values):
+	"""Swap attributes for the length of a block."""
+	saved = {k: getattr(target, k, None) for k in values}
+	for k, v in values.items():
+		setattr(target, k, v)
+	try:
+		yield
+	finally:
+		for k, v in saved.items():
+			setattr(target, k, v)
+
+
+class Allowed:
+	def raise_if_denied(self):
+		return None
+
+
+class TestListingRespectsPermissions(unittest.TestCase):
+	"""get_all ignores permissions whoever is logged in; get_list does not."""
+
+	def setUp(self):
+		self.ctx = doc_tools.ToolContext(settings=None, acting_user="clerk@example.com")
+		self.calls = []
+
+		def get_list(doctype, **kwargs):
+			self.calls.append(("get_list", frappe.session.user, doctype, kwargs))
+			return [{"name": "SO-1"}]
+
+		def get_all(*a, **k):
+			self.calls.append(("get_all",))
+			return []
+
+		self.stack = contextlib.ExitStack()
+		self.stack.enter_context(
+			patched(
+				frappe,
+				get_list=get_list,
+				get_all=get_all,
+				set_user=lambda u: setattr(frappe.session, "user", u),
+			)
+		)
+		self.stack.enter_context(patched(doc_tools.policy, check=lambda *a, **k: Allowed()))
+		self.stack.enter_context(
+			patched(
+				doc_tools,
+				readable_fields=lambda dt: {"name", "customer", "status", "modified"},
+				safe_fields=lambda dt, f: ["name"],
+			)
+		)
+
+	def tearDown(self):
+		self.stack.close()
+
+	def test_list_uses_get_list_as_the_acting_user(self):
+		doc_tools.list_documents(self.ctx, "Sales Order")
+		self.assertEqual(self.calls[0][0], "get_list")
+		self.assertEqual(self.calls[0][1], "clerk@example.com")
+
+	def test_count_uses_get_list_as_the_acting_user(self):
+		result = doc_tools.count_documents(self.ctx, "Sales Order", {"status": "Draft"})
+		self.assertEqual(self.calls[0][0], "get_list")
+		self.assertEqual(self.calls[0][1], "clerk@example.com")
+		self.assertEqual(result["count"], 1)
+
+	def test_a_large_count_is_reported_as_a_floor(self):
+		with patched(frappe, get_list=lambda *a, **k: ["x"] * (doc_tools.COUNT_CAP + 1)):
+			result = doc_tools.count_documents(self.ctx, "Sales Order")
+		self.assertEqual(result["count"], doc_tools.COUNT_CAP)
+		self.assertTrue(result["at_least"])
+
+	def test_filtering_on_an_unreadable_field_is_refused(self):
+		# A filter answers yes or no even when the field is never returned.
+		with self.assertRaises(frappe.ValidationError):
+			doc_tools.list_documents(self.ctx, "Sales Order", filters={"api_key": ["like", "a%"]})
+		with self.assertRaises(frappe.ValidationError):
+			doc_tools.count_documents(self.ctx, "Sales Order", [["api_key", "like", "a%"]])
+		self.assertEqual(self.calls, [])
+
+	def test_readable_filters_pass_in_every_shape(self):
+		doc_tools.check_filters("Sales Order", {"status": "Draft"})
+		doc_tools.check_filters("Sales Order", [["status", "=", "Draft"]])
+		doc_tools.check_filters("Sales Order", [["Sales Order", "customer", "=", "Acme"]])
+
+	def test_order_by_is_one_readable_field(self):
+		self.assertEqual(doc_tools.safe_order_by("Sales Order", None), "modified desc")
+		self.assertEqual(doc_tools.safe_order_by("Sales Order", "status DESC"), "status desc")
+		for bad in ("api_key asc", "status; drop table x", "(select 1)", "status, name"):
+			with self.assertRaises(frappe.ValidationError):
+				doc_tools.safe_order_by("Sales Order", bad)
+
+
+class TestCustomerClaims(unittest.TestCase):
+	"""Saying "I am Acme" is not proof of being Acme."""
+
+	def setUp(self):
+		self.linked = []
+		self.handed = []
+
+		contact = types.SimpleNamespace(
+			wa_id="254700111222",
+			db_set=lambda field, value, **k: self.linked.append(value),
+		)
+		self.ctx = types.SimpleNamespace(
+			settings=None, contact=contact, conversation=object(), acting_user="bot@example.com"
+		)
+
+		self.stack = contextlib.ExitStack()
+		self.stack.enter_context(patched(customer_tools, guard=lambda ctx: None))
+		self.stack.enter_context(
+			patched(frappe.db, exists=lambda *a, **k: True, get_value=lambda *a, **k: 0)
+		)
+		self.stack.enter_context(
+			patched(handoff, start=lambda conv, settings, reason=None, **k: self.handed.append(reason))
+		)
+
+	def tearDown(self):
+		self.stack.close()
+
+	def test_a_name_claim_is_not_linked(self):
+		with patched(customer_tools, by_phone=lambda n: []):
+			result = customer_tools.link_customer(self.ctx, "Acme Ltd")
+
+		self.assertFalse(result["ok"])
+		self.assertEqual(result["status"], "needs_verification")
+		self.assertEqual(self.linked, [])
+		self.assertEqual(len(self.handed), 1)
+
+	def test_a_number_on_file_is_linked(self):
+		with patched(customer_tools, by_phone=lambda n: ["Acme Ltd"]):
+			result = customer_tools.link_customer(self.ctx, "Acme Ltd")
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(self.linked, ["Acme Ltd"])
+		self.assertEqual(self.handed, [])
+
+	def test_a_name_match_reveals_only_the_name(self):
+		described = []
+		with patched(
+			customer_tools,
+			existing_link=lambda c: None,
+			by_phone=lambda n: [],
+			by_name=lambda q: ["Acme Ltd"],
+			describe=lambda names: described.append("full") or [],
+			describe_names_only=lambda names: described.append("names") or [],
+		):
+			customer_tools.find_customer(self.ctx, "Acme")
+
+		self.assertEqual(described, ["names"])
+
+
+class TestWebhookFailsClosed(unittest.TestCase):
+	class Settings:
+		verify_signature = 1
+
+		def __init__(self, **secrets):
+			self.secrets = secrets
+
+		def get_password(self, field, raise_exception=True):
+			return self.secrets.get(field)
+
+	def setUp(self):
+		self.stack = contextlib.ExitStack()
+		self.stack.enter_context(patched(inbound, warn_once=lambda *a: None))
+		self.stack.enter_context(patched(frappe, form_dict={}, get_request_header=lambda h: None))
+
+	def tearDown(self):
+		self.stack.close()
+
+	def test_no_token_refuses_everything(self):
+		self.assertFalse(inbound.verify_token(self.Settings()))
+
+	def test_the_right_token_is_accepted(self):
+		with patched(frappe, form_dict={"token": "t0k"}):
+			self.assertTrue(inbound.verify_token(self.Settings(webhook_token="t0k")))
+
+	def test_the_wrong_token_is_refused(self):
+		with patched(frappe, form_dict={"token": "nope"}):
+			self.assertFalse(inbound.verify_token(self.Settings(webhook_token="t0k")))
+
+	def test_no_secret_refuses_everything(self):
+		self.assertFalse(inbound.verify_signature(self.Settings(), b"{}"))
+
+	def test_switching_signatures_off_needs_developer_mode(self):
+		settings = self.Settings()
+		settings.verify_signature = 0
+		self.assertFalse(inbound.verify_signature(settings, b"{}"))
+
+		with patched(frappe, conf=types.SimpleNamespace(developer_mode=1)):
+			self.assertTrue(inbound.verify_signature(settings, b"{}"))
+
+	def test_a_valid_signature_is_accepted(self):
+		import hashlib
+		import hmac
+
+		body = b'{"event":"message"}'
+		sig = hmac.new(b"s3cret", body, hashlib.sha256).hexdigest()
+		with patched(frappe, get_request_header=lambda h: f"sha256={sig}"):
+			self.assertTrue(inbound.verify_signature(self.Settings(webhook_secret="s3cret"), body))
+
+
+class FakeRedis:
+	def __init__(self):
+		self.data = {}
+
+	def make_key(self, key):
+		return key
+
+	def set(self, key, value, nx=False, ex=None):
+		if nx and key in self.data:
+			return None
+		self.data[key] = value
+		return True
+
+	def incr(self, key):
+		self.data[key] = self.data.get(key, 0) + 1
+		return self.data[key]
+
+	def expire(self, key, seconds):
+		return True
+
+
+class TestInboundQueueing(unittest.TestCase):
+	def test_the_request_queues_instead_of_answering(self):
+		queued = []
+		settings = types.SimpleNamespace(log_messages=0)
+		contact = types.SimpleNamespace(name="C-1")
+
+		def ran_inline(*a, **k):
+			self.fail("the agent ran inside the request")
+
+		with (
+			patched(
+				inbound,
+				get_or_create=lambda *a: contact,
+				record_activity=lambda *a: None,
+				bump_counter=lambda s: None,
+				run_agent=ran_inline,
+			),
+			patched(frappe, enqueue=lambda method, **k: queued.append((method, k)), cache=FakeRedis()),
+		):
+			result = inbound.ingest(
+				settings, wa_id="254700111222", message_id="ABC", text="hi", raw={"big": "payload"}
+			)
+
+		self.assertTrue(result["queued"])
+		method, kwargs = queued[0]
+		self.assertEqual(method, "agent_x.core.webhook.process")
+		# `event` belongs to frappe.enqueue itself, so the message travels as payload.
+		self.assertNotIn("event", kwargs)
+		self.assertEqual(kwargs["payload"]["text"], "hi")
+		self.assertNotIn("raw", kwargs["payload"])
+		self.assertEqual(kwargs["job_id"], "agentx-reply-ABC")
+
+	def test_duplicates_are_caught_without_the_message_log(self):
+		with patched(frappe, cache=FakeRedis()):
+			self.assertTrue(inbound.first_sighting("ABC"))
+			self.assertFalse(inbound.first_sighting("ABC"))
+			self.assertTrue(inbound.first_sighting(None))
+
+	def test_one_sender_is_capped_per_hour(self):
+		contact = types.SimpleNamespace(name="C-1", wa_id="254700111222")
+		settings = types.SimpleNamespace(get={"max_messages_per_hour": 3}.get)
+
+		with patched(frappe, cache=FakeRedis()):
+			answered = [not inbound.over_rate_limit(contact, settings) for _ in range(5)]
+
+		self.assertEqual(answered, [True, True, True, False, False])
+
+	def test_zero_means_no_limit(self):
+		contact = types.SimpleNamespace(name="C-1", wa_id="254700111222")
+		settings = types.SimpleNamespace(get=lambda k: 0)
+		with patched(frappe, cache=FakeRedis()):
+			self.assertFalse(any(inbound.over_rate_limit(contact, settings) for _ in range(100)))
+
+
+class TestSendPermission(unittest.TestCase):
+	def test_reading_the_log_is_not_enough_to_send(self):
+		from agent_x import api
+
+		with patched(frappe, get_roles=lambda *a: ["Support Team"], has_permission=lambda *a, **k: True):
+			with self.assertRaises(frappe.PermissionError):
+				api.check_send_permission()
+
+	def test_the_sender_role_may_send(self):
+		from agent_x import api
+
+		with patched(frappe, get_roles=lambda *a: ["AgentX Sender"]):
+			api.check_send_permission()
 
 if __name__ == "__main__":
 	unittest.main(verbosity=2)

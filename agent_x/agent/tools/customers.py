@@ -125,6 +125,16 @@ def describe(names: list[str]) -> list[dict]:
 	return [{k: v for k, v in r.items() if v} for r in rows]
 
 
+def describe_names_only(names: list[str]) -> list[dict]:
+	if not names:
+		return []
+
+	rows = frappe.get_all(
+		"Customer", filters={"name": ("in", names)}, fields=["name", "customer_name"]
+	)
+	return [{k: v for k, v in r.items() if v} for r in rows]
+
+
 # ------------------------------------------------------------------ tools
 
 
@@ -172,11 +182,15 @@ def find_customer(ctx, query: str | None = None) -> dict:
 			),
 		}
 
+	# Matched on a name alone, the sender has proved nothing, so they are told
+	# no more than the name they typed.
+	details = describe if from_phone else describe_names_only
+
 	if len(candidates) == 1 and (from_phone or query):
 		return {
 			"status": "one_match",
 			"customer": candidates[0],
-			"details": describe(candidates),
+			"details": details(candidates),
 			"matched_on": "phone" if from_phone else "name",
 			"note": _(
 				"Confirm this is them before ordering, then call link_customer to remember it."
@@ -185,7 +199,7 @@ def find_customer(ctx, query: str | None = None) -> dict:
 
 	return {
 		"status": "several",
-		"customers": describe(candidates[:5]),
+		"customers": details(candidates[:5]),
 		"note": _("Ask which of these they are. Do not choose for them."),
 	}
 
@@ -203,6 +217,12 @@ def link_customer(ctx, customer: str) -> dict:
 	if not ctx.contact:
 		return {"ok": False, "error": _("There is no contact to link.")}
 
+	# Saying "I am Acme" proves nothing, and the only person the model can ask
+	# to confirm it is the one making the claim. A number is linked only to a
+	# customer that already has it on file; anything else is a person's call.
+	if customer not in by_phone(ctx.contact.wa_id):
+		return refer_for_verification(ctx, customer)
+
 	ctx.contact.db_set("customer", customer, update_modified=False)
 	frappe.db.commit()
 
@@ -210,6 +230,30 @@ def link_customer(ctx, customer: str) -> dict:
 		"ok": True,
 		"customer": customer,
 		"note": _("Remembered. Future orders from this number will use it without asking."),
+	}
+
+
+def refer_for_verification(ctx, customer: str) -> dict:
+	"""Hand the claim to staff instead of acting on it."""
+	from agent_x.agent import handoff
+
+	reason = _("{0} says they are customer {1}, but that number is not on file for them.").format(
+		ctx.contact.wa_id, customer
+	)
+
+	if ctx.conversation:
+		handoff.start(ctx.conversation, ctx.settings, reason=reason)
+	else:
+		frappe.log_error(reason, "AgentX: customer claim needs verification")
+
+	return {
+		"ok": False,
+		"status": "needs_verification",
+		"note": _(
+			"This number is not on file for that account, so it cannot be linked automatically. "
+			"Tell them a member of the team will confirm their account and get back to them. "
+			"Do not share any account details in the meantime."
+		),
 	}
 
 
@@ -231,7 +275,7 @@ def create_customer(ctx, customer_name: str, customer_group: str | None = None,
 		return {
 			"ok": False,
 			"status": "already_exists",
-			"customers": describe(clash[:5]),
+			"customers": describe_names_only(clash[:5]),
 			"note": _("Someone with that name already exists. Ask if it is them before creating another."),
 		}
 

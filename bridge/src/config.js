@@ -24,8 +24,9 @@ export const config = {
 
 	// Frappe endpoint we post inbound events to.
 	webhookUrl: process.env.BRIDGE_WEBHOOK_URL || "",
-	// Shared secret for the HMAC signature on those posts.
-	webhookSecret: process.env.BRIDGE_WEBHOOK_SECRET || "",
+	// Shared secret for the HMAC signature on those posts. Required: Frappe
+	// refuses unsigned events, so a bridge without it would drop every message.
+	webhookSecret: required("BRIDGE_WEBHOOK_SECRET"),
 	webhookTimeoutMs: Number(process.env.BRIDGE_WEBHOOK_TIMEOUT_MS || 15000),
 	webhookRetries: Number(process.env.BRIDGE_WEBHOOK_RETRIES || 3),
 

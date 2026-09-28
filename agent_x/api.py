@@ -8,8 +8,13 @@ import frappe
 from frappe import _
 
 
+SEND_ROLES = {"AgentX Sender", "System Manager"}
+
+
 def check_send_permission() -> None:
-	if not frappe.has_permission("WhatsApp Message", "read"):
+	# A role of its own rather than read access to the log: seeing what was
+	# said must not also mean being able to message anyone from the number.
+	if not SEND_ROLES.intersection(frappe.get_roles()):
 		frappe.throw(_("You are not permitted to send WhatsApp messages."), frappe.PermissionError)
 
 

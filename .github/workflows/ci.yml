@@ -11,6 +11,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  logic:
+    runs-on: ubuntu-latest
+    name: Logic
+    # The stubbed suite: policy gate, permissions, webhook auth, payload parsing.
+    # Needs no bench, so it runs in seconds and fails fast.
+    steps:
+      - name: Clone
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: pip install requests numpy qrcode
+
+      - name: Run tests
+        run: python tests/test_logic.py
+
   tests:
     runs-on: ubuntu-latest
     strategy:

@@ -63,6 +63,7 @@
   "reply_rules_enabled",
   "semantic_threshold",
   "daily_token_budget",
+  "max_messages_per_hour",
   "column_break_efficiency",
   "budget_status_html",
   "vision_section",
@@ -307,7 +308,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
-   "description": "Reject webhook posts that are not signed with the shared secret. The bridge signs every post; WaClient cannot, so it uses the token instead.",
+   "description": "Reject webhook posts that are not signed with the shared secret. The bridge signs every post; WaClient cannot, so it uses the token instead. Turning this off only takes effect in developer mode; a live site always checks.",
    "fieldname": "verify_signature",
    "fieldtype": "Check",
    "label": "Verify Signature"
@@ -512,6 +513,14 @@
    "fieldname": "daily_token_budget",
    "fieldtype": "Int",
    "label": "Daily Token Budget"
+  },
+  {
+   "default": "30",
+   "description": "Messages from one number beyond this in an hour are logged but not answered, so one person cannot spend the Daily Token Budget for everybody. 0 means no limit.",
+   "fieldname": "max_messages_per_hour",
+   "fieldtype": "Int",
+   "label": "Max Messages per Contact per Hour",
+   "non_negative": 1
   },
   {
    "fieldname": "column_break_efficiency",
@@ -1102,7 +1111,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-25 19:00:00.000000",
+ "modified": "2026-09-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "AgentX",
  "name": "AgentX Settings",

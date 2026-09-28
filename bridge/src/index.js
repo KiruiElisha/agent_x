@@ -18,16 +18,31 @@ app.get("/health", (req, res) => res.json({ ok: true, sessions: manager.list().l
 app.use("/api", buildRouter(manager));
 app.use(errorHandler);
 
+const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
+
 const server = app.listen(config.port, config.host, async () => {
 	logger.info({ host: config.host, port: config.port }, "bridge listening");
+	if (!LOOPBACK.has(config.host)) {
+		// Anyone who can reach this port and guess the token can send from the
+		// linked number. Put it behind a firewall or a TLS proxy.
+		logger.warn({ host: config.host }, "bridge is listening beyond loopback");
+	}
 	await manager.restoreAll();
 });
 
-async function shutdown(signal) {
+// Baileys can take a while to close its sockets; supervisor should not wait forever.
+const SHUTDOWN_GRACE_MS = 10000;
+
+async function shutdown(signal, code = 0) {
 	logger.info({ signal }, "shutting down");
+	setTimeout(() => process.exit(code), SHUTDOWN_GRACE_MS).unref();
 	server.close();
-	await manager.shutdown();
-	process.exit(0);
+	try {
+		await manager.shutdown();
+	} catch (error) {
+		logger.error({ err: String(error) }, "error while closing sessions");
+	}
+	process.exit(code);
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -37,3 +52,11 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("unhandledRejection", (reason) =>
 	logger.error({ err: String(reason) }, "unhandled rejection"),
 );
+
+// A thrown exception leaves the process in an unknown state. Close what we can
+// and exit, so the process manager starts a clean one; credentials on disk
+// mean it reconnects without a new QR.
+process.on("uncaughtException", (error) => {
+	logger.fatal({ err: error?.stack || String(error) }, "uncaught exception");
+	shutdown("uncaughtException", 1);
+});

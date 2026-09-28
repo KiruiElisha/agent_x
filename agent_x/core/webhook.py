@@ -8,6 +8,9 @@ Two providers, two shapes:
   WaClient — forwards Baileys output more or less raw, and cannot sign, so it
   authenticates with a shared token on the URL instead.
 
+The request only logs the message and queues the reply; `process` answers it
+in a background job.
+
 Always answers 200 unless authentication fails. A webhook that returns errors
 gets retried or switched off by the sender, which loses more messages than
 quietly dropping one bad event.
@@ -16,10 +19,12 @@ quietly dropping one bad event.
 import hashlib
 import hmac
 import json
+import time
+from contextlib import contextmanager
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import cint, now_datetime
 
 from agent_x.agentx.doctype.whatsapp_contact.whatsapp_contact import get_or_create, record_activity
 from agent_x.agentx.doctype.whatsapp_session import whatsapp_session
@@ -90,16 +95,19 @@ def authenticate(settings, provider: str, raw: bytes) -> bool:
 
 def verify_signature(settings, raw: bytes) -> bool:
 	"""HMAC of the raw body, as the bridge sends it."""
-	if not settings.verify_signature:
+	# Switching this off is for a local bench only. On a live site an unsigned
+	# endpoint lets anyone post messages that the agent will act on.
+	if not settings.verify_signature and frappe.conf.developer_mode:
 		return True
 
 	secret = settings.get_password("webhook_secret", raise_exception=False)
 	if not secret:
-		# Verification is on but there is nothing to check against. Refuse,
-		# rather than silently accepting anything, which is what an attacker wants.
-		frappe.log_error(
-			"Signature verification is on but no Webhook Secret is set.",
+		# Nothing to check against. Refuse, rather than silently accepting
+		# anything, which is what an attacker wants.
+		warn_once(
 			"AgentX webhook misconfigured",
+			"No Webhook Secret is set, so every bridge event is being refused. "
+			"Set one in AgentX Settings and the same value as BRIDGE_WEBHOOK_SECRET.",
 		)
 		return False
 
@@ -115,14 +123,13 @@ def verify_token(settings) -> bool:
 	"""Shared token, for providers that cannot sign their posts."""
 	expected = settings.get_password("webhook_token", raise_exception=False)
 	if not expected:
-		# No token configured means the endpoint is open. That is a real risk,
-		# so say so once rather than failing silently either way.
-		frappe.log_error(
-			"No Webhook Token is set, so the inbound endpoint accepts anything. "
-			"Set one in AgentX Settings and re-register the webhook.",
-			"AgentX webhook is unauthenticated",
+		# No token would make the endpoint open to anyone, so refuse instead.
+		warn_once(
+			"AgentX webhook misconfigured",
+			"No Webhook Token is set, so every inbound event is being refused. "
+			"Set one in AgentX Settings and press Register Webhook.",
 		)
-		return True
+		return False
 
 	provided = (
 		frappe.form_dict.get("token")
@@ -131,6 +138,19 @@ def verify_token(settings) -> bool:
 		or ""
 	)
 	return hmac.compare_digest(str(provided), str(expected))
+
+
+def warn_once(title: str, message: str) -> None:
+	"""Log a misconfiguration once an hour, not once per request.
+
+	Anyone can hit this endpoint, so logging on every refusal would let them
+	fill the Error Log.
+	"""
+	key = f"agentx:warned:{title}"
+	if frappe.cache.get_value(key):
+		return
+	frappe.cache.set_value(key, 1, expires_in_sec=3600)
+	frappe.log_error(message, title)
 
 
 # ------------------------------------------------------- bridge (flat shape)
@@ -235,7 +255,13 @@ def apply_receipt(message_id: str | None, status: str | None) -> dict:
 
 
 def ingest(settings, **event) -> dict:
-	"""Log one inbound message and, unless something says not to, answer it."""
+	"""Log one inbound message and queue the reply.
+
+	Nothing slow happens here. Transcription, downloads and the model can take
+	a minute between them, and doing that inside the request held a web worker
+	for the whole time: a burst of messages made the desk unusable, and the
+	provider timed out and sent everything again.
+	"""
 	wa_id = event.get("wa_id")
 	if not wa_id:
 		return {"status": "ignored", "reason": "no sender"}
@@ -247,14 +273,6 @@ def ingest(settings, **event) -> dict:
 	is_group = bool(event.get("is_group"))
 	contact = get_or_create(wa_id, event.get("push_name"), is_group)
 	record_activity(contact, "Incoming")
-
-	# A voice note becomes an ordinary turn, so everything downstream — the
-	# agent, the log, the history — treats it as if they had typed it.
-	transcribe_if_voice(settings, event)
-
-	# A photo or PDF has to reach the model as a file. Describing it in words
-	# is useless for reading an order off a stock list.
-	attach_media(settings, event)
 
 	log_name, first_time = log_incoming(settings, contact, event)
 
@@ -268,20 +286,138 @@ def ingest(settings, **event) -> dict:
 	bump_counter(event.get("session"))
 	frappe.db.commit()
 
-	skip = should_skip(contact, settings, is_group)
+	enqueue_reply(contact.name, event, log_name)
+	return {"status": "ok", "message": log_name, "queued": True}
+
+
+def enqueue_reply(contact: str, event: dict, log_name: str | None) -> None:
+	# The raw payload is already stored with the message when that is wanted,
+	# and the queue is no place for it.
+	job = {k: v for k, v in event.items() if k != "raw"}
+	message_id = event.get("message_id")
+
+	options = {}
+	if message_id:
+		options = {"job_id": f"agentx-reply-{message_id}", "deduplicate": True}
+
+	frappe.enqueue(
+		"agent_x.core.webhook.process",
+		queue="default",
+		timeout=REPLY_JOB_TIMEOUT,
+		contact=contact,
+		# Not `event`: frappe.enqueue takes that name for itself.
+		payload=job,
+		log_name=log_name,
+		**options,
+	)
+
+
+# One answer at a time per conversation, and long enough for the slowest one.
+REPLY_JOB_TIMEOUT = 600
+LOCK_SECONDS = 300
+
+
+def process(contact: str, payload: dict, log_name: str | None = None) -> None:
+	"""Answer one logged message. Runs in a background job."""
+	event = payload
+	settings = frappe.get_cached_doc("AgentX Settings")
+	if not settings.enabled:
+		return
+
+	contact_doc = frappe.get_doc("WhatsApp Contact", contact)
+
+	# Two messages sent a second apart would otherwise run two agents on one
+	# conversation, each unaware of the other's reply.
+	with conversation_lock(contact):
+		reply(settings, contact_doc, event, log_name)
+
+
+def reply(settings, contact, event: dict, log_name: str | None) -> bool:
+	skip = should_skip(contact, settings, bool(event.get("is_group")))
 	if skip:
 		if skip == "not a known customer":
 			notify_unverified(contact, settings, event)
-		return {"status": "ok", "message": log_name, "replied": False, "reason": skip}
+		return False
+
+	if over_rate_limit(contact, settings):
+		return False
 
 	# The agent can take several seconds. Acknowledge the message first so the
 	# sender sees something happening rather than silence.
 	acknowledge(settings, event)
 
+	# A voice note becomes an ordinary turn, so everything downstream — the
+	# agent, the log, the history — treats it as if they had typed it.
+	transcribe_if_voice(settings, event)
+	if event.get("transcribed") and log_name:
+		frappe.db.set_value(
+			"WhatsApp Message",
+			log_name,
+			{"message": event.get("text"), "transcribed": 1},
+			update_modified=False,
+		)
+
+	# A photo or PDF has to reach the model as a file. Describing it in words
+	# is useless for reading an order off a stock list.
+	attach_media(settings, event)
+
 	replied = run_agent(settings, contact, event, log_name)
 	frappe.db.commit()
+	return bool(replied)
 
-	return {"status": "ok", "message": log_name, "replied": bool(replied)}
+
+@contextmanager
+def conversation_lock(contact: str):
+	"""A Redis lock per contact, released however the turn ends.
+
+	It expires on its own, so a worker killed mid-turn cannot silence someone
+	for good. Should waiting outlast it, the turn goes ahead anyway: a late
+	answer beats none.
+	"""
+	lock = frappe.cache.lock(
+		frappe.cache.make_key(f"agentx:conversation:{contact}"),
+		timeout=LOCK_SECONDS,
+		blocking_timeout=LOCK_SECONDS,
+	)
+	acquired = lock.acquire()
+	if not acquired:
+		frappe.log_error(f"Answering {contact} without the conversation lock.", "AgentX: lock timeout")
+
+	try:
+		yield
+	finally:
+		if acquired:
+			try:
+				lock.release()
+			except Exception:
+				# It expired while the turn ran; nothing left to release.
+				pass
+
+
+def over_rate_limit(contact, settings) -> bool:
+	"""Whether this contact has sent more this hour than will be answered.
+
+	The daily token budget is shared, so without this one person flooding the
+	number spends it for everybody.
+	"""
+	limit = cint(settings.get("max_messages_per_hour"))
+	if limit <= 0:
+		return False
+
+	hour = int(time.time() // 3600)
+	key = frappe.cache.make_key(f"agentx:rate:{contact.name}:{hour}")
+	count = frappe.cache.incr(key)
+	if count == 1:
+		frappe.cache.expire(key, 3600)
+
+	if count == limit + 1:
+		frappe.log_error(
+			f"{contact.wa_id} sent more than {limit} messages this hour. "
+			"Further messages are logged but not answered until the hour is up.",
+			"AgentX: contact rate limited",
+		)
+
+	return count > limit
 
 
 def acknowledge(settings, event: dict) -> None:
@@ -360,13 +496,21 @@ def should_skip(contact, settings, is_group: bool) -> str | None:
 		return "not an allowed number"
 	if not settings.ai_enabled:
 		return "AI assistant is off"
-	if not is_verified_customer(contact, settings):
+	verified = is_verified_customer(contact, settings)
+	if verified is None:
+		# Not "not a known customer": that would tell a real customer we have
+		# never heard of them, just because the lookup broke.
+		return "customer check failed"
+	if not verified:
 		return "not a known customer"
 	return None
 
 
-def is_verified_customer(contact, settings) -> bool:
-	"""Whether this number belongs to a customer, when that is required."""
+def is_verified_customer(contact, settings) -> bool | None:
+	"""Whether this number belongs to a customer, when that is required.
+
+	None means the lookup itself failed, which is not the same as a no.
+	"""
 	if not settings.only_verified_customers:
 		return True
 
@@ -375,9 +519,10 @@ def is_verified_customer(contact, settings) -> bool:
 
 		return customers.is_verified(contact)
 	except Exception:
-		# A lookup that fails must not silently lock everyone out.
+		# The gate exists to keep strangers out, so a broken lookup keeps them
+		# out too. Customers wait for the fix; strangers never get in.
 		frappe.log_error(frappe.get_traceback(), "AgentX: customer verification failed")
-		return True
+		return None
 
 
 def notify_unverified(contact, settings, event: dict) -> None:
@@ -453,7 +598,8 @@ def log_incoming(settings, contact, event: dict) -> tuple[str | None, bool]:
 	integrity error rather than a second row.
 	"""
 	if not settings.log_messages:
-		return None, True
+		# No row to hold a unique index, so Redis decides instead.
+		return None, first_sighting(event.get("message_id"))
 
 	message_id = event.get("message_id")
 
@@ -499,6 +645,15 @@ def log_incoming(settings, contact, event: dict) -> tuple[str | None, bool]:
 		return existing, False
 
 	return doc.name, True
+
+
+def first_sighting(message_id: str | None) -> bool:
+	"""Claim a message id atomically. False if another request already did."""
+	if not message_id:
+		return True
+
+	key = frappe.cache.make_key(f"agentx:seen:{message_id}")
+	return bool(frappe.cache.set(key, 1, nx=True, ex=86400))
 
 
 def to_datetime(value):

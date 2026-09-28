@@ -19,7 +19,13 @@ cp .env.example .env
 npm start
 ```
 
-The same values go into **AgentX Settings** in Frappe.
+The same values go into **AgentX Settings** in Frappe. The bridge refuses to
+start without `BRIDGE_API_TOKEN` or `BRIDGE_WEBHOOK_SECRET`: Frappe rejects
+unsigned events, so a bridge without a secret would drop every message.
+
+Keep `BRIDGE_HOST` on `127.0.0.1`. Anyone who can reach the port and has the
+token can send from the linked number. Back up `BRIDGE_SESSION_DIR`; losing it
+means scanning the QR again.
 
 ## Under supervisor
 
@@ -50,6 +56,12 @@ Every route needs `Authorization: Bearer $BRIDGE_API_TOKEN`.
 | GET | `/api/sessions/:id/status` | One session's state |
 | POST | `/api/sessions/:id/send` | `{to, text}` or `{to, media}` |
 | POST | `/api/sessions/:id/check` | Is this number on WhatsApp |
+| GET | `/api/sessions/:id/catalog` | Business catalog (`?jid=&limit=&cursor=`, defaults to own account) |
+| GET | `/api/sessions/:id/collections` | Catalog collections (`?jid=&limit=`) |
+| POST | `/api/sessions/:id/products` | Add a catalog product |
+| PATCH | `/api/sessions/:id/products/:productId` | Edit a catalog product |
+| DELETE | `/api/sessions/:id/products` | `{productIds: [...]}`, bulk delete |
+| GET | `/api/sessions/:id/orders/:orderId` | Order details (`?token=` from the order message) |
 | POST | `/api/sessions/:id/stop` | Close the socket, keep credentials |
 | POST | `/api/sessions/:id/logout` | Unlink and forget credentials |
 | DELETE | `/api/sessions/:id` | Logout and drop the session |

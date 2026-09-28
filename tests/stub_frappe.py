@@ -48,6 +48,9 @@ def install() -> None:
 	frappe.only_for = lambda *a, **k: None
 	frappe.get_cached_doc = lambda *a, **k: None
 	frappe.get_all = lambda *a, **k: []
+	frappe.get_list = lambda *a, **k: []
+	frappe.get_roles = lambda *a, **k: []
+	frappe.conf = types.SimpleNamespace(developer_mode=0)
 	frappe.get_doc = lambda *a, **k: None
 	frappe.get_meta = lambda *a, **k: None
 	frappe.delete_doc = lambda *a, **k: None
@@ -111,6 +114,14 @@ def install() -> None:
 			return 0.0
 
 	utils.flt = _flt
+
+	def _cint(v):
+		try:
+			return int(float(v or 0))
+		except (TypeError, ValueError):
+			return 0
+
+	utils.cint = _cint
 	utils.fmt_money = lambda v, currency=None, **k: f"{_flt(v):,.2f}"
 	utils.strip_html = lambda t: __import__("re").sub(r"<[^>]+>", "", str(t or ""))
 	frappe.utils = utils

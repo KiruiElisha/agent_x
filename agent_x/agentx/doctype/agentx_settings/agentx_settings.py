@@ -41,6 +41,7 @@ class AgentXSettings(Document):
 		self.webhook_url = self.build_webhook_url()
 
 		self.validate_instance()
+		self.ensure_webhook_token()
 		self.validate_policies()
 		self.validate_numbers()
 		self.validate_working_days()
@@ -58,6 +59,22 @@ class AgentXSettings(Document):
 
 	def validate_instance(self) -> None:
 		self.waclient_instance_id = (self.waclient_instance_id or "").strip()
+
+	def ensure_webhook_token(self) -> None:
+		"""The inbound endpoint refuses everything without a token, so never lack one.
+
+		A new token only works once the provider has it, so say so.
+		"""
+		if self.webhook_token:
+			return
+
+		self.webhook_token = frappe.generate_hash(length=40)
+		if (self.whatsapp_provider or "WaClient") == "WaClient":
+			frappe.msgprint(
+				_("A Webhook Token was generated. Press Register Webhook so WaClient sends it."),
+				title=_("Webhook Token"),
+				indicator="orange",
+			)
 
 	def on_update(self) -> None:
 		self.sync_session()

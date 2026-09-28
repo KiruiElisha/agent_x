@@ -9,3 +9,4 @@ agent_x.patches.seed_defaults
 agent_x.patches.seed_feature_defaults
 agent_x.patches.seed_reply_rules
 agent_x.patches.tune_for_cost
+agent_x.patches.harden_for_production

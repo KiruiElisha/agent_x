@@ -177,7 +177,7 @@
 			</div>
 		</div>
 		<div class="actions">
-			<div class="card">
+			<div class="card" id="signup-card">
 				<h2>Create a client</h2>
 				<p class="lead">The token is shown after this and sent to the email.</p>
 				<label for="signup-id">Client id</label>
@@ -187,6 +187,16 @@
 				<div class="row" style="margin-top:14px">
 					<button id="signup" class="btn" type="button">Create and continue</button>
 					<span id="signup-error" class="err"></span>
+				</div>
+			</div>
+			<div class="card hidden" id="admin-setup">
+				<h2>Set the operator email</h2>
+				<p class="lead">This address opens the admin panel. It is saved on the server, so it does not have to be set in a terminal. You only do this once.</p>
+				<label for="admin-email">Operator email</label>
+				<input id="admin-email" type="email" autocomplete="email" placeholder="you@company.com" />
+				<div class="row" style="margin-top:14px">
+					<button id="save-admin" class="btn" type="button">Save operator email</button>
+					<span id="admin-error" class="err"></span>
 				</div>
 			</div>
 			<div class="card" id="signin-card">
@@ -358,7 +368,9 @@
 
 <script>
 	const $ = (id) => document.getElementById(id);
-	const mount = location.pathname.replace(/\/$/, "");
+	const pagePath = location.pathname.replace(/\/$/, "");
+	const onAdminPath = pagePath === "/admin" || pagePath.endsWith("/admin");
+	const mount = pagePath.replace(/\/admin$/, "");
 	const api = (path) => mount + path;
 
 	let operatorEmail = sessionStorage.getItem("agentx-operator-email") || "";
@@ -707,11 +719,14 @@
 		if (role === "admin") {
 			$("start").onclick = () => serviceAction("/start");
 			$("pair").onclick = () => serviceAction("/pair", { phone: $("phone").value.trim() });
-			$("refresh").onclick = () => {
-				call("GET", "/api/sessions/" + SERVICE + "/status").then((data) => {
+			$("refresh").onclick = async () => {
+				try {
+					const data = await call("GET", "/api/sessions/" + SERVICE + "/status");
 					paintSession(data);
-					loadSessions();
-				}).catch((error) => { $("session-msg").textContent = error.message; });
+					await loadSessions();
+				} catch (error) {
+					$("session-msg").textContent = error.message;
+				}
 			};
 			$("logout").onclick = () => {
 				show("qr", false);
@@ -809,7 +824,43 @@
 		}
 	});
 
-	if (activeEmail) loginByEmail(activeEmail).catch(() => show("login", true));
+	async function prepareAdminPage() {
+		const response = await fetch(api("/api/admin"), { headers: { Accept: "application/json" } });
+		const data = await response.json().catch(() => ({}));
+		if (!data.configured) {
+			show("signup-card", false);
+			show("signin-card", false);
+			show("admin-setup", true);
+			return;
+		}
+		show("admin-setup", false);
+		show("signin-card", true);
+	}
+
+	$("save-admin").onclick = async () => {
+		$("admin-error").textContent = "";
+		try {
+			const response = await fetch(api("/api/admin"), {
+				method: "POST",
+				headers: { Accept: "application/json", "Content-Type": "application/json" },
+				body: JSON.stringify({ email: $("admin-email").value.trim().toLowerCase() }),
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok || data.ok === false) throw new Error(data.error || data.message || "Could not save");
+			$("login-email").value = data.email || "";
+			show("admin-setup", false);
+			show("signin-card", true);
+			$("login-error").textContent = "Saved. Sign in with that email.";
+		} catch (error) {
+			$("admin-error").textContent = error.message;
+		}
+	};
+
+	if (onAdminPath) {
+		prepareAdminPage().catch(() => {});
+	} else if (activeEmail) {
+		loginByEmail(activeEmail).catch(() => show("login", true));
+	}
 </script>
 </body>
 </html>

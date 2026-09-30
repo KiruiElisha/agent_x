@@ -244,7 +244,7 @@ and press **Sign up this site**. The token is saved on that site, the webhook
 is registered, and the email goes to the user who pressed the button. Then
 open a WhatsApp Session and press Connect.
 
-The admin email, set as `BRIDGE_ADMIN_EMAIL`, signs in with that address and opens the admin panel. Every other address signs in as that client and shows the instance id and access token for copying.
+The operator email is set in the browser at `/admin`, not in a terminal. Open `https://whatsapp.site.com/admin`, enter the address once, then sign in with it. That opens the admin panel. Every other address signs in as that client and shows the instance id and access token for copying. `BRIDGE_ADMIN_EMAIL` in the environment still works if you prefer to set it there.
 
 ## In place of WaClient
 

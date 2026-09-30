@@ -6,6 +6,7 @@ import express from "express";
 import { requireAdmin, requireToken } from "./auth.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
+import { getAdminEmail, setAdminEmail } from "./adminStore.js";
 import { mailConfigured, publicOrigin, sendWelcome } from "./mail.js";
 import { createTenant, deleteTenant, findTenantByEmail, listTenants } from "./tenants.js";
 
@@ -47,6 +48,19 @@ async function sendFromService(manager, to, text) {
 export function buildRouter(manager) {
 	const router = express.Router();
 
+	router.get(
+		"/admin",
+		wrap(async (_req, res) => res.json({ ok: true, configured: Boolean(getAdminEmail()) })),
+	);
+
+	router.post(
+		"/admin",
+		wrap(async (req, res) => {
+			const saved = await setAdminEmail((req.body || {}).email);
+			return res.json({ ok: true, configured: true, email: saved });
+		}),
+	);
+
 	router.post(
 		"/login",
 		wrap(async (req, res) => {
@@ -54,7 +68,7 @@ export function buildRouter(manager) {
 			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 				return res.status(400).json({ ok: false, error: "A valid email is required" });
 			}
-			if (config.adminEmail && email === config.adminEmail) {
+			if (getAdminEmail() && email === getAdminEmail()) {
 				return res.json({ ok: true, role: "admin", email, token: config.apiToken, instances: [] });
 			}
 			const tenant = await findTenantByEmail(email);

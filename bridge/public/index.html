@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>AgentX Bridge</title>
+	<title>WhatsApp API</title>
 	<style>
 		:root {
 			color-scheme: light;
@@ -35,11 +35,21 @@
 		.ok { color: var(--green); }
 		code, .token { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; }
 
-		.gate { max-width: 920px; margin: 0 auto; padding: 48px 20px 64px; }
-		.gate-head { margin-bottom: 24px; }
-		.gate-head h1 { font-size: 28px; letter-spacing: -0.03em; }
-		.gate-head p { color: var(--muted); margin-top: 6px; }
-		.gate-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
+		.gate { max-width: 1040px; margin: 0 auto; padding: 28px 20px 72px; }
+		.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 36px; }
+		.brand { font-weight: 650; letter-spacing: -0.03em; }
+		.hero { max-width: 680px; margin-bottom: 28px; }
+		.eyebrow { font-size: 13px; color: var(--green); font-weight: 650; letter-spacing: 0.02em; }
+		.hero h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.04em; margin: 8px 0 12px; }
+		.hero p { color: var(--muted); font-size: 16px; }
+		.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
+		.step { padding: 16px; }
+		.step em { font-style: normal; font-size: 12px; color: var(--muted); }
+		.step strong { display: block; margin: 4px 0; }
+		.step p { color: var(--muted); font-size: 14px; }
+		.gate-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 16px; }
+		.card h2 { font-size: 18px; }
+		.card .lead { color: var(--muted); margin-top: 6px; font-size: 14px; }
 		.card {
 			background: var(--card);
 			border: 1px solid var(--line);
@@ -111,7 +121,8 @@
 		img.qr { width: 220px; height: 220px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 		#pairing-code { font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 2px; margin-top: 8px; }
 		@media (max-width: 860px) {
-			.gate-grid, .stats, .split, .shell { grid-template-columns: 1fr; }
+			.gate-grid, .stats, .split, .shell, .steps { grid-template-columns: 1fr; }
+			.hero h1 { font-size: 32px; }
 			.nav { flex-direction: row; overflow: auto; }
 			.nav strong { display: none; }
 		}
@@ -119,27 +130,48 @@
 </head>
 <body>
 <section id="login" class="gate">
-	<div class="gate-head">
-		<h1>AgentX Bridge</h1>
-		<p>Create a client, or sign in as the operator to manage every number.</p>
+	<div class="topbar">
+		<div class="brand">WhatsApp API</div>
+		<a href="#signin-card" style="color:var(--ink);font-size:14px">Sign in</a>
+	</div>
+	<div class="hero">
+		<div class="eyebrow">Hosted WhatsApp connection</div>
+		<h1>Send and receive WhatsApp from your own app.</h1>
+		<p>This service holds the WhatsApp session. Your app talks to it over HTTP with an instance id and an access token. Inbound messages are posted to a webhook you choose. It works with any system that already uses those two fields, including apps built for WaClient. Nothing else has to be installed next to your app.</p>
+	</div>
+	<div class="steps">
+		<div class="card step">
+			<em>1</em>
+			<strong>Create a client</strong>
+			<p>Enter a short id and your email. You receive an access token and an instance id, shown here and sent to that address.</p>
+		</div>
+		<div class="card step">
+			<em>2</em>
+			<strong>Link the phone</strong>
+			<p>Scan the QR code, or type the pairing code under WhatsApp, Linked devices.</p>
+		</div>
+		<div class="card step">
+			<em>3</em>
+			<strong>Call the API</strong>
+			<p>Set your app’s API address to this site. Paste the instance id and access token. Point the webhook at the URL that should receive messages.</p>
+		</div>
 	</div>
 	<div class="gate-grid">
 		<div class="card">
 			<h2>Create a client</h2>
-			<p style="color:var(--muted);margin-top:6px">You get a token, link a WhatsApp number, and point it at your ERPNext site.</p>
+			<p class="lead">Use any short id. The email is how you sign in later and how the token is delivered.</p>
 			<label for="signup-id">Client id</label>
 			<input id="signup-id" placeholder="acme" autocomplete="off" />
 			<label for="signup-email">Email</label>
 			<input id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" />
-			<p style="color:var(--muted);font-size:13px;margin-top:8px">The token is shown here and sent to this address.</p>
 			<div class="row" style="margin-top:14px">
 				<button id="signup" class="btn" type="button">Create and continue</button>
 				<span id="signup-error" class="err"></span>
 			</div>
 		</div>
-		<div class="card">
+		<div class="card" id="signin-card">
 			<h2>Sign in</h2>
-			<p style="color:var(--muted);margin-top:6px">Use the email address from signup. The admin email opens the admin panel.</p>
+			<p class="lead">The email from signup. The operator’s email opens the admin panel.</p>
 			<label for="login-email">Email</label>
 			<input id="login-email" type="email" autocomplete="email" placeholder="you@company.com" />
 			<div class="row" style="margin-top:14px">
@@ -152,7 +184,7 @@
 
 <div id="app" class="shell hidden">
 	<aside id="nav" class="nav hidden">
-		<strong>Admin</strong>
+		<strong>WhatsApp API</strong>
 		<button type="button" data-panel="overview" class="active">Overview</button>
 		<button type="button" data-panel="clients">Clients</button>
 		<button type="button" data-panel="numbers">Numbers</button>

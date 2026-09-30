@@ -32,11 +32,7 @@ export function buildRouter(manager) {
 			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 				return res.status(400).json({ ok: false, error: "A valid email is required" });
 			}
-			const existing = await listTenants();
-			if (existing.length >= config.maxTenants) {
-				return res.status(403).json({ ok: false, error: "this bridge is not taking new clients" });
-			}
-			const created = await createTenant((req.body || {}).id, email);
+			const created = await createTenant((req.body || {}).id, email, { limit: config.maxTenants });
 			const origin = publicOrigin(req);
 			let emailed = false;
 			if (mailConfigured()) {

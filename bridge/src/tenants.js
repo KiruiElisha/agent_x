@@ -50,10 +50,15 @@ export function assertTenantId(id) {
 	return id;
 }
 
-export async function createTenant(id, email = "") {
+export async function createTenant(id, email = "", { limit } = {}) {
 	assertTenantId(id);
 	return locked(async () => {
 		const tenants = await read();
+		if (limit !== undefined && Object.keys(tenants).length >= limit) {
+			const error = new Error("this bridge is not taking new clients");
+			error.statusCode = 403;
+			throw error;
+		}
 		if (tenants[id]) {
 			const error = new Error(`Tenant ${id} already exists`);
 			error.statusCode = 409;

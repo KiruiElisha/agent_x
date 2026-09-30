@@ -22,12 +22,26 @@ function newInstanceId() {
 	return crypto.randomBytes(7).toString("hex").toUpperCase();
 }
 
+const codes = new Map();
+const SERVICE = "service";
+
 async function ensureInstance(manager, tenantId) {
 	const access = { role: "tenant", id: tenantId };
 	const existing = manager.list(access);
 	if (existing.length) return existing;
 	await manager.open(newInstanceId(), access, { webhook_style: "waclient" });
 	return manager.list(access);
+}
+
+function serviceSession(manager) {
+	return manager.owned(SERVICE, { role: "admin" });
+}
+
+async function sendFromService(manager, to, text) {
+	const session = serviceSession(manager);
+	if (!session || session.state !== "connected") return false;
+	await session.sendText(to, text);
+	return true;
 }
 
 export function buildRouter(manager) {
@@ -43,6 +57,50 @@ export function buildRouter(manager) {
 			if (config.adminEmail && email === config.adminEmail) {
 				return res.json({ ok: true, role: "admin", email, token: config.apiToken, instances: [] });
 			}
+			const tenant = await findTenantByEmail(email);
+			if (!tenant) return res.status(404).json({ ok: false, error: "No client uses that email" });
+			const sessions = await ensureInstance(manager, tenant.id);
+			const phone = (sessions.find((session) => session.phone) || {}).phone;
+			if (phone && serviceSession(manager)?.state === "connected") {
+				const code = String(crypto.randomInt(100000, 1000000));
+				codes.set(email, { code, expires: Date.now() + 10 * 60 * 1000 });
+				try {
+					await sendFromService(
+						manager,
+						phone,
+						`Your WhatsApp API sign-in code is ${code}. It expires in 10 minutes.`,
+					);
+					return res.json({ ok: true, role: "client", email, verification_required: true });
+				} catch (error) {
+					codes.delete(email);
+					logger.warn({ err: error.message }, "could not send a verification code");
+				}
+			}
+			return res.json({
+				ok: true,
+				role: "client",
+				id: tenant.id,
+				email,
+				token: tenant.token,
+				instances: sessions.map((session) => ({
+					instance_id: session.session,
+					state: session.state,
+					phone: session.phone,
+				})),
+			});
+		}),
+	);
+
+	router.post(
+		"/login/code",
+		wrap(async (req, res) => {
+			const email = String((req.body || {}).email || "").trim().toLowerCase();
+			const code = String((req.body || {}).code || "").trim();
+			const pending = codes.get(email);
+			if (!pending || pending.expires < Date.now() || pending.code !== code) {
+				return res.status(401).json({ ok: false, error: "That code is not valid" });
+			}
+			codes.delete(email);
 			const tenant = await findTenantByEmail(email);
 			if (!tenant) return res.status(404).json({ ok: false, error: "No client uses that email" });
 			const sessions = await ensureInstance(manager, tenant.id);

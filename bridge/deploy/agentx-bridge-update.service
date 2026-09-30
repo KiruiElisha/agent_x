@@ -1,0 +1,6 @@
+[Unit]
+Description=Update the AgentX WhatsApp bridge
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/agentx-bridge update

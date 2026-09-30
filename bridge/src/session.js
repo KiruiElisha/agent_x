@@ -80,6 +80,40 @@ export function toJid(number) {
 	return `${digits}@s.whatsapp.net`;
 }
 
+function waclientEvent(instanceId, event, data) {
+	if (event === "message") {
+		return {
+			instance_id: instanceId,
+			event: "messages.upsert",
+			data: { event: "messages.upsert", messages: [data.raw] },
+		};
+	}
+	if (event === "receipt") {
+		return {
+			instance_id: instanceId,
+			event: "messages.update",
+			data: {
+				event: "messages.update",
+				messages: [
+					{
+						key: { id: data.message_id, remoteJid: data.chat_id },
+						update: { status: data.status },
+					},
+				],
+			},
+		};
+	}
+	return {
+		instance_id: instanceId,
+		event: "connection.update",
+		data: {
+			event: "connection.update",
+			connection: event === "connected" ? "open" : "close",
+			state: event,
+		},
+	};
+}
+
 class Session {
 	constructor(id, manager) {
 		this.id = assertSafeId(id);
@@ -90,6 +124,7 @@ class Session {
 		this.tenantId = null;
 		this.webhookUrl = "";
 		this.webhookSecret = "";
+		this.webhookStyle = "agentx";
 
 		this.sock = null;
 		this.state = "disconnected"; // disconnected | pairing | connected | logged_out
@@ -128,6 +163,7 @@ class Session {
 			this.tenantId = meta.tenant_id || this.tenantId;
 			this.webhookUrl = meta.webhook_url || this.webhookUrl;
 			this.webhookSecret = meta.webhook_secret || this.webhookSecret;
+			this.webhookStyle = meta.webhook_style || this.webhookStyle || "agentx";
 		} catch (error) {
 			if (error.code !== "ENOENT") {
 				logger.warn({ session: this.id, err: error.message }, "could not read session meta");
@@ -143,6 +179,7 @@ class Session {
 				tenant_id: this.tenantId,
 				webhook_url: this.webhookUrl,
 				webhook_secret: this.webhookSecret,
+				webhook_style: this.webhookStyle || "agentx",
 			},
 			null,
 			2,
@@ -154,7 +191,7 @@ class Session {
 	 * Remember who owns the session and where its events go.
 	 * A tenant cannot take a session that already belongs to someone else.
 	 */
-	async configure({ publicId, tenantId, webhookUrl, webhookSecret } = {}) {
+	async configure({ publicId, tenantId, webhookUrl, webhookSecret, webhookStyle } = {}) {
 		await this.loadMeta();
 
 		if (tenantId && this.tenantId && this.tenantId !== tenantId) {
@@ -165,6 +202,7 @@ class Session {
 		if (tenantId) this.tenantId = tenantId;
 		if (webhookUrl) this.webhookUrl = String(webhookUrl);
 		if (webhookSecret) this.webhookSecret = String(webhookSecret);
+		if (webhookStyle) this.webhookStyle = webhookStyle;
 
 		await this.saveMeta();
 		return this.status;
@@ -189,6 +227,13 @@ class Session {
 	}
 
 	async emit(event, data = {}) {
+		if (this.webhookStyle === "waclient") {
+			await deliver(waclientEvent(this.publicId || this.id, event, data), {
+				...this.callback(),
+				unsigned: true,
+			});
+			return;
+		}
 		await deliver(
 			{ event, session: this.publicId || this.id, ...data, at: new Date().toISOString() },
 			this.callback(),
@@ -346,7 +391,7 @@ class Session {
 				event.media = { ...event.media, base64: await this.inlineAudio(raw, event) };
 			}
 
-			await this.emit("message", { message: event });
+			await this.emit("message", this.webhookStyle === "waclient" ? { raw } : { message: event });
 		}
 	}
 
@@ -608,6 +653,7 @@ export class SessionManager {
 			tenantId: access?.role === "tenant" ? access.id : undefined,
 			webhookUrl: options.webhook_url,
 			webhookSecret: options.webhook_secret,
+			webhookStyle: options.webhook_style,
 		});
 		return session;
 	}

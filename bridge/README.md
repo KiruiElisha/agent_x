@@ -244,7 +244,25 @@ and press **Sign up this site**. The token is saved on that site, the webhook
 is registered, and the email goes to the user who pressed the button. Then
 open a WhatsApp Session and press Connect.
 
-The master token is only for the operator view on the same page.
+The master token opens the admin panel on this same page: client list, live numbers, and issuing a token.
+
+## In place of WaClient
+
+The bridge speaks the same calls Queen and AgentX already make to
+`https://api.waclient.com`: `access_token` and `instance_id` in the request,
+`create_instance`, `get_qrcode`, `send`, `set_webhook`, and the rest. AgentX
+does not have to be installed on the app that sends. Change that app's API
+base URL to this bridge (`https://whatsapp.site.com`) and use a token and
+instance from here.
+
+A WaClient login cannot be copied across. On this bridge, sign up (the page,
+or **Sign up this site**), create an instance, point its webhook at the same
+address the app already uses, and scan the QR. Put the new instance id and
+token in the app's existing fields. Inbound messages are posted in the same
+shape WaClient uses, so the app's webhook parser does not change.
+
+Events for an AgentX bridge session stay in the signed flat shape. A session
+registered with `set_webhook` uses the WaClient shape instead.
 
 On this server the page is `http://127.0.0.1:8787`. From anywhere else it is
 the public hostname, or:
@@ -255,6 +273,14 @@ https://<this-site>/agentx-bridge
 
 Set `BRIDGE_SIGNUP=0` in the bridge environment to turn public signup off.
 `BRIDGE_MAX_TENANTS` (default 200) is how many clients the page will create.
+
+## Automatic updates
+
+The installer turns on a daily systemd timer, `agentx-bridge-update.timer`.
+It runs `agentx-bridge update`, which pulls the latest code and reinstalls
+without dropping tokens or linked numbers. Set `BRIDGE_AUTO_UPDATE=0` before
+installing to leave updates manual. `sudo systemctl list-timers agentx-bridge-update.timer`
+shows the next run.
 
 ## Several sites, including ERPNext on another server
 

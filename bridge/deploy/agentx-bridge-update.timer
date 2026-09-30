@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily update of the AgentX WhatsApp bridge
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

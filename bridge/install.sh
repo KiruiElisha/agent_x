@@ -390,6 +390,15 @@ echo "$MODE" >.install-mode
 chmod +x "$BRIDGE_DIR/bridgectl" "$BRIDGE_DIR/install.sh"
 ln -sf "$BRIDGE_DIR/bridgectl" /usr/local/bin/agentx-bridge
 
+# Daily update. Re-running the installer keeps tokens and sessions. Set
+# BRIDGE_AUTO_UPDATE=0 in the environment before installing to leave this off.
+if [ "${BRIDGE_AUTO_UPDATE:-1}" != "0" ]; then
+	cp "$BRIDGE_DIR/deploy/agentx-bridge-update.service" /etc/systemd/system/agentx-bridge-update.service
+	cp "$BRIDGE_DIR/deploy/agentx-bridge-update.timer" /etc/systemd/system/agentx-bridge-update.timer
+	systemctl daemon-reload
+	systemctl enable --now agentx-bridge-update.timer >/dev/null 2>&1 || true
+fi
+
 # ------------------------------------------------------------------ checks
 
 say "Waiting for the bridge to answer"

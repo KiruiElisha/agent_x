@@ -280,5 +280,10 @@ export function buildRouter(manager) {
 export function errorHandler(error, req, res, _next) {
 	logger.error({ err: error.message, path: req.path }, "request failed");
 	const status = error.statusCode || error.output?.statusCode || 400;
-	res.status(status).json({ ok: false, error: error.message });
+	res.status(status).json({
+		ok: false,
+		status: "error",
+		message: error.message,
+		error: error.message,
+	});
 }

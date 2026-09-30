@@ -8,12 +8,17 @@
 		:root {
 			color-scheme: light;
 			--ink: #1c1917;
-			--muted: #57534e;
+			--muted: #78716c;
 			--line: #e7e5e4;
-			--paper: #fafaf9;
+			--paper: #f5f5f4;
 			--card: #fff;
-			--green: #3f6212;
+			--green: #166534;
+			--green-bg: #f0fdf4;
+			--amber: #92400e;
+			--amber-bg: #fffbeb;
 			--red: #9f1239;
+			--red-bg: #fff1f2;
+			--nav: 232px;
 		}
 		* { box-sizing: border-box; }
 		body {
@@ -22,147 +27,232 @@
 			color: var(--ink);
 			background: var(--paper);
 		}
-		main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
-		h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; }
-		h2 { font-size: 16px; margin: 28px 0 10px; }
-		p, .hint { color: var(--muted); }
+		button, input { font: inherit; }
+		button { cursor: pointer; }
+		h1, h2, p { margin: 0; }
+		.hidden { display: none !important; }
+		.err { color: var(--red); }
+		.ok { color: var(--green); }
+		code, .token { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; }
+
+		.gate { max-width: 920px; margin: 0 auto; padding: 48px 20px 64px; }
+		.gate-head { margin-bottom: 24px; }
+		.gate-head h1 { font-size: 28px; letter-spacing: -0.03em; }
+		.gate-head p { color: var(--muted); margin-top: 6px; }
+		.gate-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
 		.card {
 			background: var(--card);
 			border: 1px solid var(--line);
-			border-radius: 10px;
-			padding: 16px;
-			margin-top: 12px;
+			border-radius: 14px;
+			padding: 18px;
 		}
-		label { display: block; font-size: 13px; margin: 10px 0 4px; }
+		label { display: block; font-size: 13px; margin: 12px 0 4px; color: var(--muted); }
 		input {
 			width: 100%;
-			padding: 8px 10px;
+			padding: 9px 11px;
 			border: 1px solid var(--line);
-			border-radius: 6px;
-			font: inherit;
+			border-radius: 8px;
+			background: #fff;
 		}
 		.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-		button, .button {
-			font: inherit;
-			border: 1px solid var(--ink);
+		.btn {
+			border: 0;
 			background: var(--ink);
 			color: #fff;
-			border-radius: 6px;
-			padding: 7px 12px;
-			cursor: pointer;
+			border-radius: 8px;
+			padding: 8px 14px;
 		}
-		button.ghost, .button.ghost { background: #fff; color: var(--ink); }
-		button:disabled { opacity: 0.5; cursor: default; }
-		code, .token {
-			font-family: ui-monospace, monospace;
-			font-size: 13px;
-			word-break: break-all;
+		.btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+		.btn.danger { background: var(--red-bg); color: var(--red); }
+		.btn:disabled { opacity: 0.5; cursor: default; }
+
+		.shell { min-height: 100vh; display: grid; grid-template-columns: var(--nav) 1fr; }
+		.shell.client { grid-template-columns: 1fr; }
+		.nav {
+			background: #1c1917;
+			color: #fafaf9;
+			padding: 22px 14px;
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
 		}
-		.token { display: block; padding: 8px; background: var(--paper); border-radius: 6px; }
-		.badge { font-size: 12px; border: 1px solid var(--line); border-radius: 99px; padding: 2px 8px; }
-		.err { color: var(--red); }
-		.ok { color: var(--green); }
-		img.qr { width: 240px; height: 240px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+		.nav strong { display: block; padding: 0 8px 16px; font-size: 16px; }
+		.nav button {
+			text-align: left;
+			background: transparent;
+			color: #d6d3d1;
+			border: 0;
+			border-radius: 8px;
+			padding: 9px 10px;
+		}
+		.nav button.active { background: #292524; color: #fff; }
+		.workspace { padding: 22px 24px 48px; }
+		.top {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 12px;
+			margin-bottom: 18px;
+		}
+		.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+		.stat { padding: 14px 16px; }
+		.stat b { display: block; font-size: 26px; letter-spacing: -0.03em; }
+		.stat span { color: var(--muted); font-size: 13px; }
 		table { width: 100%; border-collapse: collapse; }
-		th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
-		.hidden { display: none; }
+		th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+		th { font-size: 12px; color: var(--muted); font-weight: 600; }
+		.pill { display: inline-block; border-radius: 99px; padding: 2px 8px; font-size: 12px; background: var(--paper); }
+		.pill.connected { background: var(--green-bg); color: var(--green); }
+		.pill.pairing { background: var(--amber-bg); color: var(--amber); }
+		.pill.logged_out, .pill.disconnected { background: var(--red-bg); color: var(--red); }
+		.split { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
+		.token { display: block; padding: 10px; background: var(--paper); border-radius: 8px; margin-top: 8px; }
+		img.qr { width: 220px; height: 220px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+		#pairing-code { font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 2px; margin-top: 8px; }
+		@media (max-width: 860px) {
+			.gate-grid, .stats, .split, .shell { grid-template-columns: 1fr; }
+			.nav { flex-direction: row; overflow: auto; }
+			.nav strong { display: none; }
+		}
 	</style>
 </head>
 <body>
-<main>
-	<h1>AgentX Bridge</h1>
-	<p>Onboard a client and pair their WhatsApp number. ERPNext still receives the messages.</p>
-
-	<section id="login">
+<section id="login" class="gate">
+	<div class="gate-head">
+		<h1>AgentX Bridge</h1>
+		<p>Create a client, or sign in as the operator to manage every number.</p>
+	</div>
+	<div class="gate-grid">
 		<div class="card">
-			<h2 style="margin-top:0">Create a client</h2>
-			<p class="hint">Use any short name. You get a token for this bridge, then you link a WhatsApp number and point it at your ERPNext site. No operator has to create you first.</p>
+			<h2>Create a client</h2>
+			<p style="color:var(--muted);margin-top:6px">You get a token, link a WhatsApp number, and point it at your ERPNext site.</p>
 			<label for="signup-id">Client id</label>
 			<input id="signup-id" placeholder="acme" autocomplete="off" />
 			<label for="signup-email">Email</label>
 			<input id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" />
-			<p class="hint">The token is shown here and sent to this address.</p>
-			<div class="row" style="margin-top:10px">
-				<button id="signup" type="button">Create and continue</button>
+			<p style="color:var(--muted);font-size:13px;margin-top:8px">The token is shown here and sent to this address.</p>
+			<div class="row" style="margin-top:14px">
+				<button id="signup" class="btn" type="button">Create and continue</button>
 				<span id="signup-error" class="err"></span>
 			</div>
 		</div>
 		<div class="card">
-			<label for="token">Already have a token</label>
-			<input id="token" type="password" autocomplete="off" placeholder="Master token, or a client token" />
-			<div class="row" style="margin-top:10px">
-				<button id="signin" type="button">Continue</button>
+			<h2>Admin</h2>
+			<p style="color:var(--muted);margin-top:6px">The master token opens the admin panel. A client token opens only that client.</p>
+			<label for="token">Token</label>
+			<input id="token" type="password" autocomplete="off" placeholder="Master or client token" />
+			<div class="row" style="margin-top:14px">
+				<button id="signin" class="btn" type="button">Sign in</button>
 				<span id="login-error" class="err"></span>
 			</div>
 		</div>
-	</section>
+	</div>
+</section>
 
-	<section id="app" class="hidden">
-		<div id="welcome" class="card hidden">
-			<p class="ok" style="margin:0">Save this token. It is not shown again, and it is what ERPNext uses as the Bridge API Token.</p>
-			<code id="welcome-token" class="token" style="margin-top:8px"></code>
-		</div>
-		<div class="row">
-			<span id="who" class="badge"></span>
-			<button id="signout" class="ghost" type="button">Sign out</button>
-			<button id="back" class="ghost hidden" type="button">Back to operator</button>
+<div id="app" class="shell hidden">
+	<aside id="nav" class="nav hidden">
+		<strong>Admin</strong>
+		<button type="button" data-panel="overview" class="active">Overview</button>
+		<button type="button" data-panel="clients">Clients</button>
+		<button type="button" data-panel="numbers">Numbers</button>
+	</aside>
+	<div class="workspace">
+		<div class="top">
+			<div>
+				<h1 id="who" style="font-size:20px">Bridge</h1>
+				<p id="sub" style="color:var(--muted);font-size:13px"></p>
+			</div>
+			<div class="row">
+				<button id="back" class="btn ghost hidden" type="button">Back to admin</button>
+				<button id="signout" class="btn ghost" type="button">Sign out</button>
+			</div>
 		</div>
 
-		<div id="tenants">
-			<h2>Clients</h2>
-			<p class="hint">A token is shown once. Give the client the Bridge URL and that token. They paste both into AgentX Settings, or you can pair the number here for them.</p>
-			<div class="card">
-				<label for="tenant-id">Client id</label>
-				<input id="tenant-id" placeholder="acme" />
-				<div class="row" style="margin-top:10px">
-					<button id="create-tenant" type="button">Issue token</button>
+		<div id="welcome" class="card hidden" style="margin-bottom:16px">
+			<p class="ok">Save this token. It is not shown again.</p>
+			<code id="welcome-token" class="token"></code>
+		</div>
+
+		<section data-panel-view="overview">
+			<div class="stats">
+				<div class="card stat"><b id="stat-clients">0</b><span>Clients</span></div>
+				<div class="card stat"><b id="stat-connected">0</b><span>Connected</span></div>
+				<div class="card stat"><b id="stat-pairing">0</b><span>Pairing</span></div>
+				<div class="card stat"><b id="stat-idle">0</b><span>Not linked</span></div>
+			</div>
+			<div class="card" style="margin-top:16px">
+				<h2>Recent clients</h2>
+				<table>
+					<thead><tr><th>Client</th><th>Email</th><th>Created</th></tr></thead>
+					<tbody id="overview-clients"></tbody>
+				</table>
+			</div>
+		</section>
+
+		<section id="tenants" data-panel-view="clients" class="hidden">
+			<div class="split">
+				<div class="card">
+					<h2>Clients</h2>
+					<table>
+						<thead><tr><th>Client</th><th>Email</th><th></th></tr></thead>
+						<tbody id="tenant-rows"></tbody>
+					</table>
 				</div>
-				<div id="issued" class="hidden" style="margin-top:12px">
-					<div class="hint">Bridge URL</div>
-					<code id="issued-url" class="token"></code>
-					<div class="hint" style="margin-top:8px">Token</div>
-					<code id="issued-token" class="token"></code>
-					<div class="row" style="margin-top:10px">
-						<button id="act-as" class="ghost" type="button">Pair a number for this client</button>
+				<div class="card">
+					<h2>Issue a token</h2>
+					<p style="color:var(--muted);font-size:13px;margin-top:6px">Shown once. The client pastes it in as the access token.</p>
+					<label for="tenant-id">Client id</label>
+					<input id="tenant-id" placeholder="acme" />
+					<div class="row" style="margin-top:12px">
+						<button id="create-tenant" class="btn" type="button">Issue token</button>
+					</div>
+					<div id="issued" class="hidden">
+						<div style="margin-top:12px;color:var(--muted);font-size:13px">Bridge URL</div>
+						<code id="issued-url" class="token"></code>
+						<div style="margin-top:10px;color:var(--muted);font-size:13px">Token</div>
+						<code id="issued-token" class="token"></code>
+						<div class="row" style="margin-top:12px">
+							<button id="act-as" class="btn ghost" type="button">Open this client</button>
+						</div>
 					</div>
 				</div>
 			</div>
-			<div class="card">
-				<table>
-					<thead><tr><th>Client</th><th>Created</th></tr></thead>
-					<tbody id="tenant-rows"></tbody>
-				</table>
-			</div>
-		</div>
+		</section>
 
-		<h2>WhatsApp numbers</h2>
-		<div class="card">
-			<label for="session-id">Session name</label>
-			<input id="session-id" placeholder="main" value="main" />
-			<label for="webhook-url">Webhook URL</label>
-			<input id="webhook-url" placeholder="https://client.example.com/api/method/agent_x.core.webhook.receive" />
-			<label for="webhook-secret">Webhook secret</label>
-			<input id="webhook-secret" type="password" autocomplete="off" />
-			<div class="row" style="margin-top:12px">
-				<button id="start" type="button">Show QR</button>
-				<button id="pair" class="ghost" type="button">Pairing code</button>
-				<button id="refresh" class="ghost" type="button">Refresh</button>
-				<button id="logout" class="ghost" type="button">Log out number</button>
+		<section data-panel-view="numbers">
+			<div class="split">
+				<div class="card">
+					<h2>WhatsApp numbers</h2>
+					<table>
+						<thead><tr><th>Session</th><th>State</th><th>Number</th></tr></thead>
+						<tbody id="session-rows"></tbody>
+					</table>
+				</div>
+				<div class="card">
+					<h2>Link a number</h2>
+					<label for="session-id">Session name</label>
+					<input id="session-id" value="main" />
+					<label for="webhook-url">Webhook URL</label>
+					<input id="webhook-url" placeholder="https://erp.example.com/api/method/..." />
+					<label for="webhook-secret">Webhook secret</label>
+					<input id="webhook-secret" type="password" autocomplete="off" />
+					<label for="phone">Phone, for a pairing code</label>
+					<input id="phone" placeholder="254712345678" />
+					<div class="row" style="margin-top:12px">
+						<button id="start" class="btn" type="button">Show QR</button>
+						<button id="pair" class="btn ghost" type="button">Pairing code</button>
+						<button id="refresh" class="btn ghost" type="button">Refresh</button>
+						<button id="logout" class="btn danger" type="button">Log out</button>
+					</div>
+					<p id="session-msg" style="margin-top:10px"></p>
+					<div id="pairing-code" class="hidden"></div>
+					<img id="qr" class="qr hidden" alt="WhatsApp QR code" />
+				</div>
 			</div>
-			<label for="phone">Phone for a pairing code</label>
-			<input id="phone" placeholder="254712345678" />
-			<p id="session-msg"></p>
-			<div id="pairing-code" class="hidden" style="font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 3px;"></div>
-			<img id="qr" class="qr hidden" alt="WhatsApp QR code" />
-		</div>
-		<div class="card">
-			<table>
-				<thead><tr><th>Session</th><th>State</th><th>Number</th></tr></thead>
-				<tbody id="session-rows"></tbody>
-			</table>
-		</div>
-	</section>
-</main>
+		</section>
+	</div>
+</div>
+
 <script>
 	const $ = (id) => document.getElementById(id);
 	const mount = location.pathname.replace(/\/$/, "");
@@ -172,6 +262,7 @@
 	let activeToken = sessionStorage.getItem("agentx-token") || "";
 	let role = "tenant";
 	let poll = null;
+	let sessions = [];
 
 	function headers() {
 		return { Authorization: "Bearer " + activeToken, Accept: "application/json", "Content-Type": "application/json" };
@@ -184,13 +275,20 @@
 			body: body ? JSON.stringify(body) : undefined,
 		});
 		const data = await response.json().catch(() => ({}));
-		if (!response.ok || data.ok === false) {
-			throw new Error(data.error || ("HTTP " + response.status));
-		}
+		if (!response.ok || data.ok === false) throw new Error(data.error || data.message || ("HTTP " + response.status));
 		return data;
 	}
 
 	function show(id, on) { $(id).classList.toggle("hidden", !on); }
+
+	function showPanel(name) {
+		document.querySelectorAll("[data-panel-view]").forEach((el) => {
+			el.classList.toggle("hidden", el.dataset.panelView !== name);
+		});
+		document.querySelectorAll("[data-panel]").forEach((el) => {
+			el.classList.toggle("active", el.dataset.panel === name);
+		});
+	}
 
 	async function signIn(token) {
 		activeToken = token.trim();
@@ -212,25 +310,56 @@
 		}
 		show("login", false);
 		show("app", true);
-		$("who").textContent = role === "admin" ? "Operator" : "Client";
-		show("tenants", role === "admin");
+		$("app").classList.toggle("client", role !== "admin");
+		show("nav", role === "admin");
+		$("who").textContent = role === "admin" ? "Admin" : "Your numbers";
+		$("sub").textContent = role === "admin" ? "Every client on this bridge" : "Only the numbers this token owns";
 		show("back", Boolean(operatorToken) && activeToken !== operatorToken);
-		if (role === "admin") await loadTenants();
+		if (role === "admin") {
+			await loadTenants();
+			showPanel("overview");
+		} else {
+			document.querySelectorAll("[data-panel-view]").forEach((el) => {
+				el.classList.toggle("hidden", el.dataset.panelView !== "numbers");
+			});
+		}
 		await loadSessions();
+	}
+
+	function paintTenantTable(rows, target, withActions) {
+		const list = rows || [];
+		target.innerHTML = list.map((row) => `
+			<tr>
+				<td>${escapeHtml(row.id)}</td>
+				<td>${escapeHtml(row.email || "")}</td>
+				${withActions ? `<td><button class="btn ghost" type="button" data-remove="${escapeHtml(row.id)}">Remove</button></td>` : `<td>${escapeHtml((row.created_at || "").replace("T", " ").slice(0, 16))}</td>`}
+			</tr>`).join("") || `<tr><td colspan="3">No clients yet.</td></tr>`;
 	}
 
 	async function loadTenants() {
 		const data = await call("GET", "/api/tenants");
-		$("tenant-rows").innerHTML = (data.tenants || []).map((row) =>
-			`<tr><td>${escapeHtml(row.id)}</td><td>${escapeHtml(row.created_at || "")}</td></tr>`
-		).join("") || `<tr><td colspan="2">No clients yet.</td></tr>`;
+		const rows = data.tenants || [];
+		paintTenantTable(rows, $("tenant-rows"), true);
+		paintTenantTable(rows.slice(0, 8), $("overview-clients"), false);
+		$("stat-clients").textContent = String(rows.length);
 	}
 
 	async function loadSessions() {
 		const data = await call("GET", "/api/sessions");
-		$("session-rows").innerHTML = (data.sessions || []).map((row) =>
-			`<tr><td>${escapeHtml(row.session)}</td><td>${escapeHtml(row.state)}</td><td>${escapeHtml(row.phone || "")}</td></tr>`
-		).join("") || `<tr><td colspan="3">No numbers started.</td></tr>`;
+		sessions = data.sessions || [];
+		$("session-rows").innerHTML = sessions.map((row) => `
+			<tr data-session="${escapeHtml(row.session)}">
+				<td>${escapeHtml(row.session)}</td>
+				<td><span class="pill ${escapeHtml(row.state || "")}">${escapeHtml(row.state || "")}</span></td>
+				<td>${escapeHtml(row.phone ? "+" + row.phone : "")}</td>
+			</tr>`).join("") || `<tr><td colspan="3">No numbers started.</td></tr>`;
+		const count = (state) => sessions.filter((row) => row.state === state).length;
+		const connected = $("stat-connected");
+		if (connected) {
+			connected.textContent = String(count("connected"));
+			$("stat-pairing").textContent = String(count("pairing"));
+			$("stat-idle").textContent = String(sessions.length - count("connected") - count("pairing"));
+		}
 	}
 
 	function callbackBody() {
@@ -244,7 +373,7 @@
 
 	function paintSession(data) {
 		const state = data.state || "";
-		$("session-msg").textContent = state + (data.phone ? " · +" + data.phone : "") + (data.last_error ? " · " + data.last_error : "");
+		$("session-msg").textContent = [state, data.phone ? "+" + data.phone : "", data.last_error || ""].filter(Boolean).join(" · ");
 		$("session-msg").className = state === "connected" ? "ok" : "";
 		if (data.qr) {
 			$("qr").src = data.qr;
@@ -287,7 +416,7 @@
 	}
 
 	function escapeHtml(value) {
-		return String(value).replace(/[&<>"']/g, (ch) => ({
+		return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
 			"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 		}[ch]));
 	}
@@ -311,7 +440,7 @@
 				}),
 			});
 			const data = await response.json().catch(() => ({}));
-			if (!response.ok || data.ok === false) throw new Error(data.error || ("HTTP " + response.status));
+			if (!response.ok || data.ok === false) throw new Error(data.error || data.message || ("HTTP " + response.status));
 			$("welcome").querySelector("p").textContent = data.emailed
 				? "The token was emailed to you. It is also shown below, and it is not shown again."
 				: "Save this token. Mail is not configured on this bridge, so this page is the only copy.";
@@ -338,6 +467,10 @@
 		$("session-msg").className = "err";
 	});
 
+	document.querySelectorAll("[data-panel]").forEach((button) => {
+		button.onclick = () => showPanel(button.dataset.panel);
+	});
+
 	$("create-tenant").onclick = async () => {
 		try {
 			const data = await call("POST", "/api/tenants", { id: $("tenant-id").value.trim().toLowerCase() });
@@ -361,6 +494,17 @@
 		});
 	};
 
+	$("tenant-rows").onclick = async (event) => {
+		const id = event.target?.dataset?.remove;
+		if (!id || !confirm("Remove " + id + "? Their token stops working.")) return;
+		try {
+			await call("DELETE", "/api/tenants/" + encodeURIComponent(id));
+			await loadTenants();
+		} catch (error) {
+			$("session-msg").textContent = error.message;
+		}
+	};
+
 	async function withSession(work) {
 		$("session-msg").className = "";
 		$("session-msg").textContent = "Asking WhatsApp…";
@@ -375,13 +519,10 @@
 
 	$("start").onclick = () => withSession(() =>
 		call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/start", callbackBody()));
-
 	$("pair").onclick = () => withSession(() =>
 		call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/pair", { ...callbackBody(), phone: $("phone").value.trim() }));
-
 	$("refresh").onclick = () => withSession(() =>
 		call("GET", "/api/sessions/" + encodeURIComponent(sessionId()) + "/qr"));
-
 	$("logout").onclick = () => withSession(async () => {
 		stopPoll();
 		show("qr", false);
@@ -390,13 +531,13 @@
 	});
 
 	$("session-rows").onclick = (event) => {
-		const cell = event.target.closest("td");
-		if (cell && cell.cellIndex === 0) $("session-id").value = cell.textContent;
+		const row = event.target.closest("tr[data-session]");
+		if (!row) return;
+		$("session-id").value = row.dataset.session;
+		showPanel("numbers");
 	};
 
-	if (activeToken) {
-		signIn(activeToken).catch(() => show("login", true));
-	}
+	if (activeToken) signIn(activeToken).catch(() => show("login", true));
 </script>
 </body>
 </html>

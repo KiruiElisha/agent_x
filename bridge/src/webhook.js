@@ -21,7 +21,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export async function deliver(event, target = {}) {
 	const url = target.webhookUrl || config.webhookUrl;
-	const secret = target.webhookSecret || config.webhookSecret;
+	const secret = target.unsigned ? "" : target.webhookSecret || config.webhookSecret;
 
 	if (!url) {
 		logger.debug({ event: event.event, session: event.session }, "no webhook url, dropping event");

@@ -9,6 +9,7 @@ import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { buildRouter, errorHandler } from "./routes.js";
 import { SessionManager } from "./session.js";
+import { buildWaClientRouter } from "./waclient.js";
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 
@@ -31,6 +32,8 @@ app.get(["/", "/index.html"], (_req, res) => {
 });
 
 app.use("/api", buildRouter(manager));
+// Same host, WaClient paths: /send, /get_qrcode, /create_instance, …
+app.use(buildWaClientRouter(manager));
 app.use(errorHandler);
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);

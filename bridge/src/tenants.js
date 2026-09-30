@@ -75,6 +75,7 @@ export async function listTenants() {
 	const tenants = await read();
 	return Object.entries(tenants).map(([id, row]) => ({
 		id,
+		email: row.email || "",
 		created_at: row.created_at || null,
 	}));
 }

@@ -386,7 +386,7 @@ else
 fi
 
 echo "$MODE" >.install-mode
-chmod +x bridgectl
+chmod +x "$BRIDGE_DIR/bridgectl" "$BRIDGE_DIR/install.sh"
 ln -sf "$BRIDGE_DIR/bridgectl" /usr/local/bin/agentx-bridge
 
 # ------------------------------------------------------------------ checks

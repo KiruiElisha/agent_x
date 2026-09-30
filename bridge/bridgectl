@@ -192,7 +192,10 @@ EOF
 			# which git refuses to touch as root unless told it is expected.
 			git -c safe.directory='*' -C "$DIR" pull --ff-only
 		fi
-		exec "$DIR/install.sh" --yes
+		# git pull restores the mode stored in the repo. Run through bash so a
+		# missing execute bit cannot stop the update, then put the bit back.
+		chmod +x "$DIR/install.sh" "$DIR/bridgectl"
+		exec bash "$DIR/install.sh" --yes
 		;;
 
 	help | -h | --help)

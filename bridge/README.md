@@ -244,7 +244,7 @@ and press **Sign up this site**. The token is saved on that site, the webhook
 is registered, and the email goes to the user who pressed the button. Then
 open a WhatsApp Session and press Connect.
 
-The master token opens the admin panel on this same page: client list, live numbers, and issuing a token.
+The admin email, set as `BRIDGE_ADMIN_EMAIL`, signs in with that address and opens the admin panel. Every other address signs in as that client and shows the instance id and access token for copying.
 
 ## In place of WaClient
 

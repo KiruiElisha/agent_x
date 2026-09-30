@@ -1,12 +1,13 @@
 /** HTTP surface the Frappe app talks to. */
 
+import crypto from "node:crypto";
 import express from "express";
 
 import { requireAdmin, requireToken } from "./auth.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { mailConfigured, publicOrigin, sendWelcome } from "./mail.js";
-import { createTenant, deleteTenant, listTenants } from "./tenants.js";
+import { createTenant, deleteTenant, findTenantByEmail, listTenants } from "./tenants.js";
 
 /** Turns a rejected promise into a JSON error instead of an unhandled rejection. */
 function wrap(handler) {
@@ -17,8 +18,48 @@ function missing(res, id) {
 	return res.status(404).json({ ok: false, error: "unknown session" });
 }
 
+function newInstanceId() {
+	return crypto.randomBytes(7).toString("hex").toUpperCase();
+}
+
+async function ensureInstance(manager, tenantId) {
+	const access = { role: "tenant", id: tenantId };
+	const existing = manager.list(access);
+	if (existing.length) return existing;
+	await manager.open(newInstanceId(), access, { webhook_style: "waclient" });
+	return manager.list(access);
+}
+
 export function buildRouter(manager) {
 	const router = express.Router();
+
+	router.post(
+		"/login",
+		wrap(async (req, res) => {
+			const email = String((req.body || {}).email || "").trim().toLowerCase();
+			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+				return res.status(400).json({ ok: false, error: "A valid email is required" });
+			}
+			if (config.adminEmail && email === config.adminEmail) {
+				return res.json({ ok: true, role: "admin", email, token: config.apiToken, instances: [] });
+			}
+			const tenant = await findTenantByEmail(email);
+			if (!tenant) return res.status(404).json({ ok: false, error: "No client uses that email" });
+			const sessions = await ensureInstance(manager, tenant.id);
+			return res.json({
+				ok: true,
+				role: "client",
+				id: tenant.id,
+				email,
+				token: tenant.token,
+				instances: sessions.map((session) => ({
+					instance_id: session.session,
+					state: session.state,
+					phone: session.phone,
+				})),
+			});
+		}),
+	);
 
 	// Anyone who can open the bridge hostname can create their own client.
 	// The token comes back once. It cannot see anyone else's numbers.
@@ -33,17 +74,31 @@ export function buildRouter(manager) {
 				return res.status(400).json({ ok: false, error: "A valid email is required" });
 			}
 			const created = await createTenant((req.body || {}).id, email, { limit: config.maxTenants });
+			const sessions = await ensureInstance(manager, created.id);
+			const instanceId = sessions[0]?.session || "";
 			const origin = publicOrigin(req);
 			let emailed = false;
 			if (mailConfigured()) {
 				try {
-					await sendWelcome({ to: email, id: created.id, token: created.token, origin });
+					await sendWelcome({
+						to: email,
+						id: created.id,
+						token: created.token,
+						origin,
+						instanceId,
+					});
 					emailed = true;
 				} catch (error) {
 					logger.warn({ err: error.message, client: created.id }, "could not email the client token");
 				}
 			}
-			return res.json({ ok: true, emailed, bridge_url: origin, ...created });
+			return res.json({
+				ok: true,
+				emailed,
+				bridge_url: origin,
+				instance_id: instanceId,
+				...created,
+			});
 		}),
 	);
 

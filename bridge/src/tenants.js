@@ -59,6 +59,14 @@ export async function createTenant(id, email = "", { limit } = {}) {
 			error.statusCode = 403;
 			throw error;
 		}
+		const taken = Object.entries(tenants).find(
+			([, row]) => email && (row.email || "").toLowerCase() === String(email).toLowerCase(),
+		);
+		if (taken) {
+			const error = new Error("That email already has a client");
+			error.statusCode = 409;
+			throw error;
+		}
 		if (tenants[id]) {
 			const error = new Error(`Tenant ${id} already exists`);
 			error.statusCode = 409;
@@ -69,6 +77,16 @@ export async function createTenant(id, email = "", { limit } = {}) {
 		await write(tenants);
 		return { id, token, email: email || "", created_at: tenants[id].created_at };
 	});
+}
+
+export async function findTenantByEmail(email) {
+	const want = String(email || "").trim().toLowerCase();
+	if (!want) return null;
+	const tenants = await read();
+	for (const [id, row] of Object.entries(tenants)) {
+		if ((row.email || "").toLowerCase() === want) return { id, token: row.token, email: row.email };
+	}
+	return null;
 }
 
 export async function listTenants() {

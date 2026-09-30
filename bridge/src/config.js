@@ -46,6 +46,7 @@ export const config = {
 	publicUrl: (process.env.BRIDGE_PUBLIC_URL || "").replace(/\/$/, ""),
 	signup: process.env.BRIDGE_SIGNUP !== "0",
 	maxTenants: Number(process.env.BRIDGE_MAX_TENANTS || 200),
+	adminEmail: (process.env.BRIDGE_ADMIN_EMAIL || "").trim().toLowerCase(),
 
 	smtpHost: process.env.BRIDGE_SMTP_HOST || "",
 	smtpPort: Number(process.env.BRIDGE_SMTP_PORT || 587),

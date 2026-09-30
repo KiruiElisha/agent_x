@@ -18,25 +18,21 @@ export function publicOrigin(req) {
 	return host ? `${proto}://${host}` : "";
 }
 
-export async function sendWelcome({ to, id, token, origin }) {
+export async function sendWelcome({ to, id, token, origin, instanceId }) {
 	const url = origin || config.publicUrl || "";
 	const text = [
 		"Your WhatsApp bridge client is ready.",
 		"",
 		`Client: ${id}`,
+		instanceId ? `Instance ID: ${instanceId}` : "",
 		`Bridge URL: ${url}`,
-		`API token: ${token}`,
+		`Access token: ${token}`,
 		"",
-		"In ERPNext, open AgentX Settings and set:",
-		"  WhatsApp Provider: Self-Hosted Bridge",
-		`  Bridge URL: ${url}`,
-		"  Bridge API Token: the token above",
+		"In ERPNext or another app, set the API address to the bridge URL,",
+		"and paste the instance id and access token into the existing fields.",
 		"",
-		"Save, then open a WhatsApp Session and press Connect.",
-		"You can also open the bridge page and continue with this token.",
-		"",
-		"Keep the token private. It is not shown again.",
-	].join("\n");
+		"Keep the token private. Sign in again with this email to copy it.",
+	].filter((line) => line !== undefined).join("\n");
 
 	await deliver({ to, subject: "Your WhatsApp bridge client", text });
 }

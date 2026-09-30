@@ -106,7 +106,8 @@
 		.pill.pairing { background: var(--amber-bg); color: var(--amber); }
 		.pill.logged_out, .pill.disconnected { background: var(--red-bg); color: var(--red); }
 		.split { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
-		.token { display: block; padding: 10px; background: var(--paper); border-radius: 8px; margin-top: 8px; }
+		.copyline { display: flex; gap: 8px; align-items: stretch; margin-top: 6px; }
+		.copyline code { flex: 1; padding: 10px; background: var(--paper); border-radius: 8px; }
 		img.qr { width: 220px; height: 220px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 		#pairing-code { font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 2px; margin-top: 8px; }
 		@media (max-width: 860px) {
@@ -137,12 +138,12 @@
 			</div>
 		</div>
 		<div class="card">
-			<h2>Admin</h2>
-			<p style="color:var(--muted);margin-top:6px">The master token opens the admin panel. A client token opens only that client.</p>
-			<label for="token">Token</label>
-			<input id="token" type="password" autocomplete="off" placeholder="Master or client token" />
+			<h2>Sign in</h2>
+			<p style="color:var(--muted);margin-top:6px">Use the email address from signup. The admin email opens the admin panel.</p>
+			<label for="login-email">Email</label>
+			<input id="login-email" type="email" autocomplete="email" placeholder="you@company.com" />
 			<div class="row" style="margin-top:14px">
-				<button id="signin" class="btn" type="button">Sign in</button>
+				<button id="signin" class="btn" type="button">Continue</button>
 				<span id="login-error" class="err"></span>
 			</div>
 		</div>
@@ -209,8 +210,10 @@
 					<div id="issued" class="hidden">
 						<div style="margin-top:12px;color:var(--muted);font-size:13px">Bridge URL</div>
 						<code id="issued-url" class="token"></code>
+						<button class="btn ghost" type="button" data-copy="issued-url" style="margin-top:8px">Copy URL</button>
 						<div style="margin-top:10px;color:var(--muted);font-size:13px">Token</div>
 						<code id="issued-token" class="token"></code>
+						<button class="btn ghost" type="button" data-copy="issued-token" style="margin-top:8px">Copy token</button>
 						<div class="row" style="margin-top:12px">
 							<button id="act-as" class="btn ghost" type="button">Open this client</button>
 						</div>
@@ -220,17 +223,25 @@
 		</section>
 
 		<section data-panel-view="numbers">
+			<div id="creds" class="card hidden" style="margin-bottom:16px">
+				<h2>Copy into your app</h2>
+				<p style="color:var(--muted);font-size:13px;margin-top:6px">Use these as the instance id and access token. The bridge URL is this site.</p>
+				<label>Instance ID</label>
+				<div class="copyline"><code id="cred-instance"></code><button class="btn ghost" type="button" data-copy="cred-instance">Copy</button></div>
+				<label>Access token</label>
+				<div class="copyline"><code id="cred-token"></code><button class="btn ghost" type="button" data-copy="cred-token">Copy</button></div>
+			</div>
 			<div class="split">
 				<div class="card">
 					<h2>WhatsApp numbers</h2>
 					<table>
-						<thead><tr><th>Session</th><th>State</th><th>Number</th></tr></thead>
+						<thead><tr><th>Instance ID</th><th>State</th><th>Number</th></tr></thead>
 						<tbody id="session-rows"></tbody>
 					</table>
 				</div>
 				<div class="card">
 					<h2>Link a number</h2>
-					<label for="session-id">Session name</label>
+					<label for="session-id">Instance ID</label>
 					<input id="session-id" value="main" />
 					<label for="webhook-url">Webhook URL</label>
 					<input id="webhook-url" placeholder="https://erp.example.com/api/method/..." />
@@ -258,8 +269,9 @@
 	const mount = location.pathname.replace(/\/$/, "");
 	const api = (path) => mount + path;
 
-	let operatorToken = sessionStorage.getItem("agentx-operator") || "";
-	let activeToken = sessionStorage.getItem("agentx-token") || "";
+	let operatorEmail = sessionStorage.getItem("agentx-operator-email") || "";
+	let activeEmail = sessionStorage.getItem("agentx-email") || "";
+	let activeToken = "";
 	let role = "tenant";
 	let poll = null;
 	let sessions = [];
@@ -303,18 +315,14 @@
 			role = "tenant";
 		}
 		if (tenants) role = "admin";
-		sessionStorage.setItem("agentx-token", activeToken);
-		if (role === "admin") {
-			operatorToken = activeToken;
-			sessionStorage.setItem("agentx-operator", operatorToken);
-		}
 		show("login", false);
 		show("app", true);
 		$("app").classList.toggle("client", role !== "admin");
 		show("nav", role === "admin");
+		show("creds", role !== "admin");
 		$("who").textContent = role === "admin" ? "Admin" : "Your numbers";
-		$("sub").textContent = role === "admin" ? "Every client on this bridge" : "Only the numbers this token owns";
-		show("back", Boolean(operatorToken) && activeToken !== operatorToken);
+		$("sub").textContent = role === "admin" ? "Every client on this bridge" : activeEmail;
+		show("back", Boolean(operatorEmail) && activeEmail !== operatorEmail);
 		if (role === "admin") {
 			await loadTenants();
 			showPanel("overview");
@@ -324,6 +332,7 @@
 			});
 		}
 		await loadSessions();
+		if (role !== "admin") renderCreds(activeToken, sessions);
 	}
 
 	function paintTenantTable(rows, target, withActions) {
@@ -421,10 +430,37 @@
 		}[ch]));
 	}
 
+	function renderCreds(token, rows) {
+		const first = (rows || [])[0];
+		$("cred-instance").textContent = first?.session || first?.instance_id || "";
+		$("cred-token").textContent = token || "";
+		show("creds", Boolean(token));
+	}
+
+	async function loginByEmail(email) {
+		const response = await fetch(api("/api/login"), {
+			method: "POST",
+			headers: { Accept: "application/json", "Content-Type": "application/json" },
+			body: JSON.stringify({ email }),
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok || data.ok === false) throw new Error(data.error || data.message || ("HTTP " + response.status));
+		activeEmail = email;
+		sessionStorage.setItem("agentx-email", email);
+		if (data.role === "admin") {
+			operatorEmail = email;
+			sessionStorage.setItem("agentx-operator-email", email);
+		}
+		await signIn(data.token || "");
+		if (data.role !== "admin") {
+			renderCreds(data.token, (data.instances || []).map((row) => ({ session: row.instance_id })));
+		}
+	}
+
 	$("signin").onclick = async () => {
 		$("login-error").textContent = "";
 		show("welcome", false);
-		try { await signIn($("token").value); }
+		try { await loginByEmail($("login-email").value.trim().toLowerCase()); }
 		catch (error) { $("login-error").textContent = error.message; }
 	};
 
@@ -444,9 +480,11 @@
 			$("welcome").querySelector("p").textContent = data.emailed
 				? "The token was emailed to you. It is also shown below, and it is not shown again."
 				: "Save this token. Mail is not configured on this bridge, so this page is the only copy.";
-			$("welcome-token").textContent = data.token || "";
+			$("welcome-token").textContent = [data.instance_id, data.token].filter(Boolean).join("\n");
 			show("welcome", true);
+			activeEmail = $("signup-email").value.trim().toLowerCase();
 			await signIn(data.token || "");
+			renderCreds(data.token, [{ session: data.instance_id }]);
 		} catch (error) {
 			$("signup-error").textContent = error.message;
 		}
@@ -454,15 +492,18 @@
 
 	$("signout").onclick = () => {
 		stopPoll();
+		sessionStorage.removeItem("agentx-email");
+		sessionStorage.removeItem("agentx-operator-email");
 		sessionStorage.removeItem("agentx-token");
 		sessionStorage.removeItem("agentx-operator");
 		activeToken = "";
-		operatorToken = "";
+		activeEmail = "";
+		operatorEmail = "";
 		show("app", false);
 		show("login", true);
 	};
 
-	$("back").onclick = () => signIn(operatorToken).catch((error) => {
+	$("back").onclick = () => loginByEmail(operatorEmail).catch((error) => {
 		$("session-msg").textContent = error.message;
 		$("session-msg").className = "err";
 	});
@@ -537,7 +578,20 @@
 		showPanel("numbers");
 	};
 
-	if (activeToken) signIn(activeToken).catch(() => show("login", true));
+	document.body.addEventListener("click", async (event) => {
+		const id = event.target?.dataset?.copy;
+		if (!id) return;
+		const text = $(id)?.textContent || "";
+		try {
+			await navigator.clipboard.writeText(text);
+			event.target.textContent = "Copied";
+			setTimeout(() => { event.target.textContent = event.target.textContent.startsWith("Copy") ? event.target.dataset.label || "Copy" : "Copy"; }, 1200);
+		} catch (error) {
+			$("session-msg").textContent = "Select the value and copy it manually.";
+		}
+	});
+
+	if (activeEmail) loginByEmail(activeEmail).catch(() => show("login", true));
 </script>
 </body>
 </html>

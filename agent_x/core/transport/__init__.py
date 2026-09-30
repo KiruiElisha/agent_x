@@ -65,10 +65,31 @@ def health(settings=None) -> dict:
 		if not base:
 			frappe.throw(_("Set the Bridge URL in AgentX Settings."))
 
+		token = settings.get_password("bridge_api_token", raise_exception=False)
+		if not token:
+			return {
+				"provider": provider,
+				"reachable": False,
+				"error": "Set the Bridge API Token in AgentX Settings.",
+			}
+
 		try:
-			response = requests.get(f"{base}/health", timeout=settings.request_timeout or 30)
+			# /api/sessions checks the token. /health does not, so a cloud site
+			# with a wrong token would otherwise look connected.
+			response = requests.get(
+				f"{base}/api/sessions",
+				headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+				timeout=settings.request_timeout or 30,
+			)
+			if response.status_code == 401:
+				return {
+					"provider": provider,
+					"reachable": False,
+					"error": "The bridge rejected the API token.",
+				}
 			response.raise_for_status()
-			return {"provider": provider, "reachable": True, **response.json()}
+			body = response.json()
+			return {"provider": provider, "reachable": True, **body}
 		except requests.RequestException as exc:
 			return {"provider": provider, "reachable": False, "error": str(exc)}
 

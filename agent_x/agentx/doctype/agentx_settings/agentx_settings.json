@@ -205,7 +205,7 @@
   {
    "default": "http://127.0.0.1:8787",
    "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
-   "description": "Where the Node bridge listens. Keep it on loopback.",
+   "description": "Where the Node bridge listens. On this server use http://127.0.0.1:8787. From an ERPNext site elsewhere, use this site's public address plus /agentx-bridge.",
    "fieldname": "bridge_url",
    "fieldtype": "Data",
    "label": "Bridge URL",
@@ -213,7 +213,7 @@
   },
   {
    "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
-   "description": "Must match BRIDGE_API_TOKEN in the bridge environment.",
+   "description": "The master token from the bridge, or a tenant token issued for this site.",
    "fieldname": "bridge_api_token",
    "fieldtype": "Password",
    "label": "Bridge API Token",
@@ -289,7 +289,7 @@
    "label": "Inbound Webhook"
   },
   {
-   "description": "Set this as BRIDGE_WEBHOOK_URL in the bridge environment.",
+   "description": "Where this site receives WhatsApp events. The bridge stores it on the session when you connect or press Register Webhook.",
    "fieldname": "webhook_url",
    "fieldtype": "Data",
    "label": "Webhook URL",
@@ -315,7 +315,7 @@
   },
   {
    "depends_on": "eval:doc.whatsapp_provider==\"Self-Hosted Bridge\"",
-   "description": "Must match BRIDGE_WEBHOOK_SECRET in the bridge environment.",
+   "description": "Signs posts to this site. Each site has its own secret; it does not have to match a single bridge-wide value.",
    "fieldname": "webhook_secret",
    "fieldtype": "Password",
    "label": "Webhook Secret"

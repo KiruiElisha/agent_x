@@ -15,8 +15,16 @@ frappe.ui.form.on("AgentX Settings", {
 			frappe.set_route("List", "WhatsApp Session"),
 		);
 
-		if (frm.doc.whatsapp_provider === "WaClient") {
+		if (frm.doc.whatsapp_provider === "WaClient" || frm.doc.whatsapp_provider === "Self-Hosted Bridge") {
 			frm.add_custom_button(__("Register Webhook"), () => register_webhook(frm));
+		}
+
+		if (frm.doc.whatsapp_provider === "Self-Hosted Bridge") {
+			frm.add_custom_button(
+				__("Issue Tenant Token"),
+				() => issue_tenant(frm),
+				__("Bridge"),
+			);
 		}
 
 		if (frm.doc.webhook_url) {
@@ -24,7 +32,9 @@ frappe.ui.form.on("AgentX Settings", {
 				"webhook_url",
 				"description",
 				frm.doc.whatsapp_provider === "Self-Hosted Bridge"
-					? __("Set this as BRIDGE_WEBHOOK_URL in the bridge environment, then restart the bridge.")
+					? __(
+							"Stored on this site's session when you connect or press Register Webhook. A cloud ERPNext site uses its own URL.",
+						)
 					: __("Press Register Webhook to point WaClient at this URL."),
 			);
 		}
@@ -163,6 +173,49 @@ function test_connection(frm) {
 
 		wrapper.empty().append(bits.join(""));
 	});
+}
+
+function issue_tenant(frm) {
+	const dialog = new frappe.ui.Dialog({
+		title: __("Issue a Tenant Token"),
+		fields: [
+			{
+				fieldname: "tenant_id",
+				fieldtype: "Data",
+				label: __("Tenant ID"),
+				reqd: 1,
+				description: __(
+					"A short name for the client, such as the site. Shown once: paste the token into that site's Bridge API Token.",
+				),
+			},
+		],
+		primary_action_label: __("Issue"),
+		primary_action(values) {
+			frm.call({
+				doc: frm.doc,
+				method: "create_bridge_tenant",
+				args: { tenant_id: values.tenant_id },
+				freeze: true,
+				freeze_message: __("Issuing…"),
+			}).then((r) => {
+				const result = r.message || {};
+				dialog.hide();
+				const address = window.location.origin + "/agentx-bridge";
+				frappe.msgprint({
+					title: __("Tenant token"),
+					message: `
+						<p>${__("On the other ERPNext site, set WhatsApp Provider to Self-Hosted Bridge.")}</p>
+						<p><b>${__("Bridge URL")}</b><br><code>${frappe.utils.escape_html(address)}</code></p>
+						<p><b>${__("Bridge API Token")}</b><br><code>${frappe.utils.escape_html(result.token || "")}</code></p>
+						<p class="text-muted">${__("This token is shown once. It can only use sessions for {0}.", [
+							frappe.utils.escape_html(result.id || values.tenant_id),
+						])}</p>`,
+					indicator: "green",
+				});
+			});
+		},
+	});
+	dialog.show();
 }
 
 function register_webhook(frm) {

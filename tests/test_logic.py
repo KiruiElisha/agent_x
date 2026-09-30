@@ -720,6 +720,44 @@ class TestTransportMediaCapability(unittest.TestCase):
 		self.assertFalse(BridgeTransport.needs_public_media)
 
 
+class TestSiteClock(unittest.TestCase):
+	def test_unix_time_is_shifted_into_the_site_zone(self):
+		from agent_x.core.time import to_site_datetime
+
+		# 2024-01-01 00:00:00 UTC is 03:00 in Nairobi.
+		self.assertEqual(to_site_datetime(1704067200, "Africa/Nairobi"), "2024-01-01 03:00:00")
+
+	def test_an_iso_instant_is_the_same_shift(self):
+		from agent_x.core.time import to_site_datetime
+
+		self.assertEqual(
+			to_site_datetime("2024-01-01T00:00:00.000Z", "Africa/Nairobi"),
+			"2024-01-01 03:00:00",
+		)
+
+	def test_utc_is_left_alone(self):
+		from agent_x.core.time import to_site_datetime
+
+		self.assertEqual(to_site_datetime(1704067200, "UTC"), "2024-01-01 00:00:00")
+
+	def test_a_blank_value_is_not_invented(self):
+		from agent_x.core.time import to_site_datetime
+
+		self.assertIsNone(to_site_datetime(None, "Africa/Nairobi"))
+		self.assertIsNone(to_site_datetime("", "UTC"))
+		self.assertIsNone(to_site_datetime("not-a-time", "UTC"))
+
+
+class TestBridgeAddress(unittest.TestCase):
+	def test_loopback_and_localhost_sites_are_private(self):
+		from agent_x.agentx.doctype.agentx_settings.agentx_settings import host_is_private
+
+		self.assertTrue(host_is_private("http://127.0.0.1:8787"))
+		self.assertTrue(host_is_private("http://site.localhost"))
+		self.assertFalse(host_is_private("https://demo.example.com/agentx-bridge"))
+
+
+
 # --------------------------------------------------------------------------
 # Taking an order. The model writes the conversation, but never the figures
 # someone is agreeing to, so the rendering below is what actually protects the

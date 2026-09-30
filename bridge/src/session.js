@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import makeWASocket, {
+	Browsers,
 	DisconnectReason,
 	downloadMediaMessage,
 	fetchLatestBaileysVersion,
@@ -21,11 +22,32 @@ const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 60000;
 
 /** Session ids become directory names, so keep them boring. */
-function assertSafeId(id) {
-	if (!/^[A-Za-z0-9._-]{1,64}$/.test(String(id || ""))) {
-		throw new Error("Session id must be 1-64 chars of letters, digits, dot, dash, or underscore");
+export function assertSafeId(id) {
+	if (!/^[A-Za-z0-9._-]{1,120}$/.test(String(id || ""))) {
+		throw new Error("Session id must be 1-120 chars of letters, digits, dot, dash, or underscore");
 	}
 	return id;
+}
+
+/** A tenant's sessions live beside the local ones, under a name nobody else can guess at. */
+export function storageId(access, publicId) {
+	assertSafeId(publicId);
+	if (!access || access.role === "admin") return publicId;
+	assertSafeId(access.id);
+	return assertSafeId(`${access.id}--${publicId}`);
+}
+
+function httpError(status, message) {
+	const error = new Error(message);
+	error.statusCode = status;
+	return error;
+}
+
+/** Baileys returns eight characters. WhatsApp shows them as two groups. */
+export function formatPairingCode(code) {
+	const raw = String(code || "").replace(/[^A-Za-z0-9]/g, "");
+	if (raw.length === 8) return `${raw.slice(0, 4)}-${raw.slice(4)}`;
+	return raw;
 }
 
 /** Baileys wants a Buffer for inline bytes, or {url} for a remote fetch. */
@@ -33,6 +55,19 @@ function toMediaUpload({ url, base64 }) {
 	if (base64) return Buffer.from(base64, "base64");
 	if (url) return { url };
 	throw new Error("Each product image needs a url or base64 content");
+}
+
+async function baileysVersion() {
+	try {
+		const result = await Promise.race([
+			fetchLatestBaileysVersion(),
+			new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+		]);
+		return result.version;
+	} catch (error) {
+		logger.warn({ err: error.message }, "could not fetch Baileys version, using the library default");
+		return undefined;
+	}
 }
 
 export function toJid(number) {
@@ -51,11 +86,17 @@ class Session {
 		this.manager = manager;
 		this.dir = path.join(config.sessionDir, this.id);
 
+		this.publicId = id;
+		this.tenantId = null;
+		this.webhookUrl = "";
+		this.webhookSecret = "";
+
 		this.sock = null;
 		this.state = "disconnected"; // disconnected | pairing | connected | logged_out
 		this.qr = null; // data URL, valid until the next rotation
 		this.qrExpiresAt = null;
 		this.qrAttempts = 0;
+		this.pairingCode = null;
 		this.phone = null;
 		this.lastError = null;
 		this.reconnectAttempts = 0;
@@ -65,17 +106,93 @@ class Session {
 
 	get status() {
 		return {
-			session: this.id,
+			session: this.publicId || this.id,
 			state: this.state,
 			phone: this.phone,
+			tenant: this.tenantId,
 			has_qr: Boolean(this.qr),
 			qr_expires_at: this.qrExpiresAt,
 			last_error: this.lastError,
 		};
 	}
 
+	callback() {
+		return { webhookUrl: this.webhookUrl, webhookSecret: this.webhookSecret };
+	}
+
+	async loadMeta() {
+		try {
+			const raw = await fs.readFile(path.join(this.dir, "meta.json"), "utf8");
+			const meta = JSON.parse(raw);
+			this.publicId = meta.public_id || this.publicId;
+			this.tenantId = meta.tenant_id || this.tenantId;
+			this.webhookUrl = meta.webhook_url || this.webhookUrl;
+			this.webhookSecret = meta.webhook_secret || this.webhookSecret;
+		} catch (error) {
+			if (error.code !== "ENOENT") {
+				logger.warn({ session: this.id, err: error.message }, "could not read session meta");
+			}
+		}
+	}
+
+	async saveMeta() {
+		await fs.mkdir(this.dir, { recursive: true });
+		const body = JSON.stringify(
+			{
+				public_id: this.publicId,
+				tenant_id: this.tenantId,
+				webhook_url: this.webhookUrl,
+				webhook_secret: this.webhookSecret,
+			},
+			null,
+			2,
+		);
+		await fs.writeFile(path.join(this.dir, "meta.json"), body);
+	}
+
+	/**
+	 * Remember who owns the session and where its events go.
+	 * A tenant cannot take a session that already belongs to someone else.
+	 */
+	async configure({ publicId, tenantId, webhookUrl, webhookSecret } = {}) {
+		await this.loadMeta();
+
+		if (tenantId && this.tenantId && this.tenantId !== tenantId) {
+			throw httpError(403, "session belongs to another tenant");
+		}
+
+		if (publicId) this.publicId = publicId;
+		if (tenantId) this.tenantId = tenantId;
+		if (webhookUrl) this.webhookUrl = String(webhookUrl);
+		if (webhookSecret) this.webhookSecret = String(webhookSecret);
+
+		await this.saveMeta();
+		return this.status;
+	}
+
+	waitFor(predicate, ms) {
+		if (predicate()) return Promise.resolve(true);
+
+		return new Promise((resolve) => {
+			const poll = setInterval(() => {
+				if (!predicate()) return;
+				clearInterval(poll);
+				clearTimeout(timer);
+				resolve(true);
+			}, 200);
+
+			const timer = setTimeout(() => {
+				clearInterval(poll);
+				resolve(false);
+			}, ms);
+		});
+	}
+
 	async emit(event, data = {}) {
-		await deliver({ event, session: this.id, ...data, at: new Date().toISOString() });
+		await deliver(
+			{ event, session: this.publicId || this.id, ...data, at: new Date().toISOString() },
+			this.callback(),
+		);
 	}
 
 	async connect() {
@@ -85,21 +202,24 @@ class Session {
 		await fs.mkdir(this.dir, { recursive: true });
 
 		const { state, saveCreds } = await useMultiFileAuthState(this.dir);
-		const { version } = await fetchLatestBaileysVersion();
+		const version = await baileysVersion();
 
-		logger.info({ session: this.id, version }, "starting socket");
+		logger.info({ session: this.id, version: version || "default" }, "starting socket");
 
-		this.sock = makeWASocket({
-			version,
+		const options = {
 			auth: state,
 			logger: baileysLogger,
-			// We render the QR ourselves and ship it to Frappe.
-			printQRInTerminal: false,
 			// Presence updates and receipts from every chat are noise we never read.
 			markOnlineOnConnect: false,
 			syncFullHistory: false,
-			browser: ["AgentX", "Chrome", "1.0.0"],
-		});
+			// A made-up browser name is rejected by WhatsApp: the QR scans and
+			// the pairing code is accepted, then the link is dropped. A stock
+			// desktop identity is what linked devices expect.
+			browser: Browsers.ubuntu("Chrome"),
+		};
+		if (version) options.version = version;
+
+		this.sock = makeWASocket(options);
 
 		this.sock.ev.on("creds.update", saveCreds);
 		this.sock.ev.on("connection.update", (update) => {
@@ -216,7 +336,7 @@ class Session {
 		for (const raw of messages || []) {
 			if (!raw?.message) continue;
 
-			const event = normalise(this.id, raw);
+			const event = normalise(this.publicId || this.id, raw);
 			// Statuses, channels, and broadcast lists are not conversations.
 			if (!isConversation(event.chat_id)) continue;
 
@@ -323,6 +443,32 @@ class Session {
 			{ logger: baileysLogger, reuploadRequest: this.sock.updateMediaMessage },
 		);
 		return buffer.toString("base64");
+	}
+
+	/**
+	 * Eight-character code typed on the phone, instead of scanning.
+	 * The socket has to be up and waiting for a QR before WhatsApp will issue one.
+	 */
+	async requestPairingCode(phone) {
+		const digits = String(phone || "").replace(/\D/g, "");
+		if (!digits) throw httpError(400, "A phone number in international format is required");
+
+		if (this.state === "connected") {
+			throw httpError(400, "This session is already connected");
+		}
+
+		if (!this.sock) await this.connect();
+
+		const ready = await this.waitFor(() => this.qr || this.state === "connected", 15000);
+		if (this.state === "connected") throw httpError(400, "This session is already connected");
+		if (!ready || !this.sock) throw httpError(400, "WhatsApp did not offer a pairing code in time");
+
+		const code = await this.sock.requestPairingCode(digits);
+		this.pairingCode = formatPairingCode(code);
+		this.state = "pairing";
+		logger.info({ session: this.id }, "pairing code issued");
+		await this.emit("pairing_code", { pairing_code: this.pairingCode, phone: digits });
+		return { pairing_code: this.pairingCode, phone: digits, state: this.state };
 	}
 
 	async getCatalog(jid, { limit, cursor } = {}) {
@@ -437,23 +583,48 @@ export class SessionManager {
 		return session;
 	}
 
-	list() {
-		return [...this.sessions.values()].map((session) => session.status);
+	list(access) {
+		return [...this.sessions.values()]
+			.filter((session) => !access || access.role === "admin" || session.tenantId === access.id)
+			.map((session) => session.status);
 	}
 
-	async start(id) {
-		const session = this.get(id, { create: true });
+	/**
+	 * The session this caller is allowed to touch, or null.
+	 * A tenant's public name `main` is stored as `<tenant>--main`.
+	 */
+	owned(publicId, access) {
+		const session = this.sessions.get(storageId(access, publicId));
+		if (!session) return null;
+		if (access?.role === "tenant" && session.tenantId && session.tenantId !== access.id) return null;
+		return session;
+	}
+
+	async open(publicId, access, options = {}) {
+		const key = storageId(access, publicId);
+		const session = this.get(key, { create: true });
+		await session.configure({
+			publicId,
+			tenantId: access?.role === "tenant" ? access.id : undefined,
+			webhookUrl: options.webhook_url,
+			webhookSecret: options.webhook_secret,
+		});
+		return session;
+	}
+
+	async start(publicId, access, options = {}) {
+		const session = await this.open(publicId, access, options);
 		await session.connect();
-		return session.status;
+		return session;
 	}
 
-	async remove(id) {
-		const session = this.get(id);
-		if (!session) return { session: id, state: "unknown" };
+	async remove(publicId, access) {
+		const session = this.owned(publicId, access);
+		if (!session) return { session: publicId, state: "unknown" };
 
 		await session.logout();
-		this.sessions.delete(id);
-		return { session: id, state: "removed" };
+		this.sessions.delete(session.id);
+		return { session: publicId, state: "removed" };
 	}
 
 	/** Bring back every session that still has credentials on disk. */
@@ -478,8 +649,10 @@ export class SessionManager {
 			}
 
 			try {
-				await this.start(entry.name);
-				restored.push(entry.name);
+				const session = this.get(entry.name, { create: true });
+				await session.loadMeta();
+				await session.connect();
+				restored.push(session.publicId || entry.name);
 			} catch (error) {
 				logger.error({ session: entry.name, err: error.message }, "could not restore session");
 			}

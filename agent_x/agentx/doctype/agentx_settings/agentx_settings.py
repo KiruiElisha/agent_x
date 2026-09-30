@@ -205,6 +205,11 @@ class AgentXSettings(Document):
 		return None
 
 	def is_within_business_hours(self, moment: datetime.datetime | None = None) -> bool:
+		"""Whether `moment` falls in the working window.
+
+		The window is read in the time zone from System Settings. `now_datetime`
+		is already in that zone, so a bare call uses the site clock, not UTC.
+		"""
 		if not self.restrict_business_hours:
 			return True
 
@@ -243,33 +248,35 @@ class AgentXSettings(Document):
 	def register_webhook(self, session: str | None = None) -> dict:
 		"""Tell the provider where to deliver inbound events.
 
-		Only providers that accept a webhook URL over their API do anything here.
-		The self-hosted bridge reads its URL from its own environment.
+		WaClient stores one URL per instance. The bridge stores one URL per
+		session, so each tenant — including an ERPNext site on another server —
+		receives only its own events.
 		"""
 		from agent_x.core import transport
 
 		self.save()
 
 		url = self.webhook_url
-		self.warn_if_unreachable(url)
+		provider = self.whatsapp_provider or "WaClient"
+
+		if provider == "WaClient":
+			self.warn_if_unreachable(url)
+		else:
+			self.warn_bridge_webhook(url)
 
 		token = self.get_password("webhook_token", raise_exception=False)
-		if token and (self.whatsapp_provider or "WaClient") == "WaClient":
+		if token and provider == "WaClient":
 			url = f"{url}?token={token}"
+
+		if provider != "WaClient":
+			# The bridge stores the webhook on the session, so one has to exist.
+			session = session or self.session_for_setup().name
 
 		return transport.get_transport(session=session, settings=self).register_webhook(url)
 
 	def warn_if_unreachable(self, url: str) -> None:
 		"""A provider on the internet cannot post to a private address."""
-		from urllib.parse import urlparse
-
-		parsed = urlparse(url)
-		host = (parsed.hostname or "").lower()
-
-		private = host in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "") or host.startswith(
-			("10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.")
-		)
-		if private:
+		if host_is_private(url):
 			frappe.throw(
 				_(
 					"The webhook URL points at a private address ({0}), which a hosted provider "
@@ -277,12 +284,53 @@ class AgentXSettings(Document):
 				).format(url)
 			)
 
-		if parsed.scheme != "https":
+		self.warn_if_http(url)
+
+	def warn_bridge_webhook(self, url: str) -> None:
+		"""A local bridge can call a local site. A public bridge cannot.
+
+		ERPNext on another server reaches this bridge through the site's domain.
+		Events go back to that server, so its webhook has to be public too.
+		"""
+		bridge_public = not host_is_private(self.bridge_url or "")
+		if host_is_private(url) and bridge_public:
+			frappe.throw(
+				_(
+					"The webhook URL points at a private address ({0}). The bridge is on a "
+					"public host, so it cannot deliver events there. Set Public Base URL to "
+					"this site's public HTTPS address."
+				).format(url)
+			)
+
+		self.warn_if_http(url)
+
+	def warn_if_http(self, url: str) -> None:
+		from urllib.parse import urlparse
+
+		if urlparse(url).scheme != "https":
 			frappe.msgprint(
 				_("{0} is plain HTTP. Most providers require HTTPS and will drop events.").format(url),
 				title=_("Insecure Webhook URL"),
 				indicator="orange",
 			)
+
+	@frappe.whitelist()
+	def create_bridge_tenant(self, tenant_id: str) -> dict:
+		"""Issue a token a cloud ERPNext site can use to log in to this bridge.
+
+		The token is shown once. Paste it into that site's Bridge API Token,
+		and set its Bridge URL to this site's public address plus /agentx-bridge.
+		"""
+		if (self.whatsapp_provider or "WaClient") != "Self-Hosted Bridge":
+			frappe.throw(_("Switch the provider to Self-Hosted Bridge first."))
+
+		from agent_x.core.transport.bridge import BridgeTransport
+
+		tenant_id = (tenant_id or "").strip().lower()
+		if not tenant_id:
+			frappe.throw(_("Give the tenant a short id, such as the client's site name."))
+
+		return BridgeTransport(None, self).create_tenant(tenant_id)
 
 	# ------------------------------------------------------- the connection
 	#
@@ -409,6 +457,17 @@ def match_number(number: str, rows) -> bool:
 	from agent_x.core.phone import same_number
 
 	return any(same_number(number, row.phone_number) for row in rows)
+
+
+def host_is_private(url: str) -> bool:
+	"""True when a machine off this network cannot open the address."""
+	from urllib.parse import urlparse
+
+	host = (urlparse(url or "").hostname or "").lower()
+	if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "") or host.endswith(".localhost"):
+		return True
+
+	return host.startswith(("10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19."))
 
 
 def get_settings() -> "AgentXSettings":

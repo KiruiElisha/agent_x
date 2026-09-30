@@ -13,6 +13,8 @@ function required(name) {
 
 export const config = {
 	port: Number(process.env.BRIDGE_PORT || 8787),
+	// Stay on loopback. A site that already has a domain publishes this port
+	// at /agentx-bridge, so a cloud ERPNext never needs this host opened.
 	host: process.env.BRIDGE_HOST || "127.0.0.1",
 
 	// Frappe calls us with this; we reject anything else. No default on purpose:
@@ -22,7 +24,14 @@ export const config = {
 	// Where Baileys credentials live. One subdirectory per session.
 	sessionDir: path.resolve(process.env.BRIDGE_SESSION_DIR || "./sessions"),
 
-	// Frappe endpoint we post inbound events to.
+	// Tokens issued to other sites. The master BRIDGE_API_TOKEN is not in here.
+	tenantsFile: path.resolve(
+		process.env.BRIDGE_TENANTS_FILE ||
+			path.join(path.dirname(path.resolve(process.env.BRIDGE_SESSION_DIR || "./sessions")), "tenants.json"),
+	),
+
+	// Fallback for a single local site that has not registered its own webhook.
+	// Every session can carry its own URL, which is how a second tenant works.
 	webhookUrl: process.env.BRIDGE_WEBHOOK_URL || "",
 	// Shared secret for the HMAC signature on those posts. Required: Frappe
 	// refuses unsigned events, so a bridge without it would drop every message.

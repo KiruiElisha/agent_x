@@ -6,6 +6,7 @@ realtime so the QR appears without polling.
 """
 
 import re
+import time
 
 import frappe
 from frappe import _
@@ -102,11 +103,19 @@ class WhatsAppSession(Document):
 
 		self.apply_status(result)
 
-		# The bridge pushes a QR through the webhook on its own. WaClient does
-		# not push anything, so pull one now or the form would sit empty.
-		if result.get("state") != "connected":
+		if result.get("qr"):
+			self.store_qr(result)
+		elif result.get("state") != "connected":
+			# The bridge usually includes the QR. If it does not, ask again
+			# for a few seconds: WhatsApp issues the code just after the socket opens.
 			try:
-				self.fetch_qr()
+				for attempt in range(8):
+					pulled = self.fetch_qr()
+					if pulled.get("qr") or pulled.get("state") == "connected":
+						result = {**result, **pulled}
+						break
+					if attempt < 7:
+						time.sleep(0.5)
 			except Exception as exc:
 				# Not fatal: the operator can press Fetch QR and see the real error.
 				frappe.log_error(frappe.get_traceback(), "AgentX: could not fetch QR on connect")
@@ -125,18 +134,30 @@ class WhatsAppSession(Document):
 	def fetch_qr(self) -> dict:
 		"""Pull the current QR, for when the realtime push was missed."""
 		result = self.transport().qr()
+		return self.store_qr(result)
 
-		if result.get("qr"):
-			self.db_set(
-				{
-					"qr_data": result["qr"],
-					"qr_expires_at": result.get("expires_at"),
-					"state": "Pairing",
-					"last_error": None,
-				},
-				notify=True,
-				commit=True,
-			)
+	def store_qr(self, result: dict) -> dict:
+		"""Keep a new QR, and interpret its expiry in the site time zone."""
+		if result.get("state") == "connected":
+			self.apply_status(result)
+			return result
+
+		image = result.get("qr")
+		if not image or image == self.qr_data:
+			return result
+
+		from agent_x.core.time import site_timezone, to_site_datetime
+
+		self.db_set(
+			{
+				"qr_data": image,
+				"qr_expires_at": to_site_datetime(result.get("expires_at"), site_timezone()),
+				"state": "Pairing",
+				"last_error": None,
+			},
+			notify=True,
+			commit=True,
+		)
 		return result
 
 	@frappe.whitelist()
@@ -245,8 +266,10 @@ def handle_event(session_name: str, event: str, data: dict) -> None:
 		values["state"] = state
 
 	if event == "qr":
+		from agent_x.core.time import site_timezone, to_site_datetime
+
 		values["qr_data"] = data.get("qr")
-		values["qr_expires_at"] = data.get("expires_at")
+		values["qr_expires_at"] = to_site_datetime(data.get("expires_at"), site_timezone())
 		values["last_error"] = None
 
 	elif event == "connected":

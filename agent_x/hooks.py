@@ -18,6 +18,10 @@ add_to_apps_screen = [
 # ------------
 after_install = "agent_x.install.after_install"
 
+# A cloud ERPNext calls https://<this-site>/agentx-bridge and we forward that
+# to the loopback bridge. The token is still checked by the bridge.
+before_request = ["agent_x.core.bridge_proxy.maybe_proxy"]
+
 # Document Events
 # ---------------
 # Alerts hang off ordinary document events. The dispatcher checks one cached

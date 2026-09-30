@@ -38,7 +38,28 @@ class BridgeTransport(Transport):
 
 	# ------------------------------------------------------------------ plumbing
 
-	def request(self, method: str, path: str, payload: dict | None = None) -> dict:
+	def callback_payload(self) -> dict:
+		"""Where this site wants its events, sent with every session call.
+
+		A cloud site and a local site share one bridge. Each one names its own
+		webhook here, so a message for one never lands on the other.
+		"""
+		url = (getattr(self.settings, "webhook_url", None) or "").strip()
+		if not url and hasattr(self.settings, "build_webhook_url"):
+			url = self.settings.build_webhook_url()
+
+		payload = {}
+		if url:
+			payload["webhook_url"] = url
+
+		secret = self.settings.get_password("webhook_secret", raise_exception=False) or ""
+		if secret:
+			payload["webhook_secret"] = secret
+		return payload
+
+	def request(
+		self, method: str, path: str, payload: dict | None = None, timeout: int | None = None
+	) -> dict:
 		url = f"{self.base_url}/api/{path.lstrip('/')}"
 		headers = {"Authorization": f"Bearer {self.token}", "Accept": "application/json"}
 
@@ -49,7 +70,7 @@ class BridgeTransport(Transport):
 				json=payload if method.upper() != "GET" else None,
 				params=payload if method.upper() == "GET" else None,
 				headers=headers,
-				timeout=self.timeout,
+				timeout=timeout or self.timeout,
 			)
 		except requests.RequestException as exc:
 			raise TransportError(
@@ -86,7 +107,18 @@ class BridgeTransport(Transport):
 	# ------------------------------------------------------------------ pairing
 
 	def start(self) -> dict:
-		return self.shape(self.request("POST", f"sessions/{self.require_session()}/start"))
+		# The bridge waits for the QR before answering, so this needs longer
+		# than an ordinary send.
+		body = self.request(
+			"POST",
+			f"sessions/{self.require_session()}/start",
+			self.callback_payload(),
+			timeout=max(self.timeout, 25),
+		)
+		shaped = self.shape(body)
+		shaped["qr"] = qr_to_data_url(body.get("qr"))
+		shaped["expires_at"] = body.get("expires_at")
+		return shaped
 
 	def status(self) -> dict:
 		return self.shape(self.request("GET", f"sessions/{self.require_session()}/status"))
@@ -95,6 +127,7 @@ class BridgeTransport(Transport):
 		body = self.request("GET", f"sessions/{self.require_session()}/qr")
 		return {
 			"session": self.session_name,
+			"state": normalise_state(body.get("state")),
 			"qr": qr_to_data_url(body.get("qr")),
 			"expires_at": body.get("expires_at"),
 		}
@@ -151,6 +184,24 @@ class BridgeTransport(Transport):
 		)
 		return {"message_id": body.get("message_id"), "raw": body}
 
+	def pairing_code(self, phone: str) -> dict:
+		"""An 8 character code typed on the phone, instead of scanning."""
+		digits = "".join(c for c in str(phone or "") if c.isdigit())
+		if not digits:
+			frappe.throw(_("A phone number in international format is needed for a pairing code."))
+
+		body = self.request(
+			"POST",
+			f"sessions/{self.require_session()}/pair",
+			{**self.callback_payload(), "phone": digits},
+			timeout=max(self.timeout, 40),
+		)
+		code = body.get("pairing_code")
+		if not code:
+			raise TransportError(_("The bridge did not return a pairing code."))
+
+		return {"supported": True, "pairing_code": code, "phone": digits}
+
 	def check_number(self, number: str) -> dict:
 		body = self.request(
 			"POST", f"sessions/{self.require_session()}/check", {"number": number}
@@ -161,9 +212,26 @@ class BridgeTransport(Transport):
 		return self.request("GET", "sessions").get("sessions") or []
 
 	def register_webhook(self, url: str) -> dict:
-		# The bridge is told its webhook through its own environment, because it
-		# has to know the URL before Frappe ever calls it.
+		"""Store this site's webhook on its own session.
+
+		The bridge no longer has one URL for every tenant. A cloud ERPNext
+		registers the address WhatsApp events should come back to.
+		"""
+		secret = self.settings.get_password("webhook_secret", raise_exception=False) or ""
+		body = self.request(
+			"POST",
+			f"sessions/{self.require_session()}/webhook",
+			{"webhook_url": url, "webhook_secret": secret},
+		)
+		registered = body.get("webhook_url") or ""
 		return {
-			"supported": False,
-			"note": _("Set BRIDGE_WEBHOOK_URL in the bridge environment and restart it."),
+			"supported": True,
+			"webhook_url": url,
+			"registered_url": registered,
+			"verified": registered == url,
 		}
+
+	def create_tenant(self, tenant_id: str) -> dict:
+		"""Mint a token another site can log in with. Master token only."""
+		body = self.request("POST", "tenants", {"id": (tenant_id or "").strip().lower()})
+		return {"id": body.get("id"), "token": body.get("token")}

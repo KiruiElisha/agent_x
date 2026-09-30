@@ -139,13 +139,16 @@ server {
 
 ## API
 
-Every route needs `Authorization: Bearer $BRIDGE_API_TOKEN`.
+Every route except `/health` needs `Authorization: Bearer`. Use `BRIDGE_API_TOKEN`
+for this server, or a tenant token for another site.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/health` | Liveness, no auth |
 | GET | `/api/sessions` | Status of every live session |
-| POST | `/api/sessions/:id/start` | Begin pairing or resume |
+| POST | `/api/sessions/:id/start` | Begin pairing or resume. Body may set `webhook_url` and `webhook_secret` for this session |
+| POST | `/api/sessions/:id/webhook` | Store this session's webhook without opening the socket |
+| POST | `/api/sessions/:id/pair` | `{phone}` — 8 character pairing code |
 | GET | `/api/sessions/:id/qr` | Current QR as a data URL |
 | GET | `/api/sessions/:id/status` | One session's state |
 | POST | `/api/sessions/:id/send` | `{to, text}` or `{to, media}` |
@@ -159,6 +162,38 @@ Every route needs `Authorization: Bearer $BRIDGE_API_TOKEN`.
 | POST | `/api/sessions/:id/stop` | Close the socket, keep credentials |
 | POST | `/api/sessions/:id/logout` | Unlink and forget credentials |
 | DELETE | `/api/sessions/:id` | Logout and drop the session |
+| POST | `/api/tenants` | Master token only. `{id}` returns a token for one client, once |
+| GET | `/api/tenants` | Master token only. Ids, not the tokens |
+| DELETE | `/api/tenants/:id` | Master token only. Forget that token |
+
+The master token (`BRIDGE_API_TOKEN`) can use every session. A tenant token can
+only use the sessions it has started. Two clients who both name a session `main`
+do not share a WhatsApp link.
+
+## Several sites, including ERPNext on another server
+
+The bridge stays on `127.0.0.1`. Any site on this bench where AgentX is installed
+publishes it at:
+
+```text
+https://<that-site>/agentx-bridge
+```
+
+No extra domain. A cloud ERPNext site sets:
+
+- WhatsApp Provider: Self-Hosted Bridge
+- Bridge URL: `https://<that-site>/agentx-bridge`
+- Bridge API Token: the token from **Issue Tenant Token** on this server
+- Webhook Secret: any secret you generate there
+- Public Base URL: the cloud site's own HTTPS address, if it is not detected
+
+Connect, or Register Webhook, stores that cloud site's webhook on its session.
+Events for that session are posted there and signed with that site's secret.
+Message times and business hours use the time zone in System Settings on the
+site that receives the event.
+
+On this server, leave Bridge URL as `http://127.0.0.1:8787` and keep the master
+token. That site does not go through `/agentx-bridge`.
 
 ## Events posted to Frappe
 

@@ -657,16 +657,11 @@ def first_sighting(message_id: str | None) -> bool:
 
 
 def to_datetime(value):
-	"""Unix seconds to something Frappe can store; now if it is missing or odd."""
-	from datetime import datetime
+	"""Unix seconds to a site-local time Frappe can store; now if it is missing."""
+	from agent_x.core.time import site_timezone, to_site_datetime
 
-	try:
-		if value:
-			return datetime.fromtimestamp(int(value)).strftime("%Y-%m-%d %H:%M:%S")
-	except (ValueError, OSError, OverflowError, TypeError):
-		pass
-
-	return now_datetime()
+	rendered = to_site_datetime(value, site_timezone()) if value else None
+	return rendered or now_datetime()
 
 
 def bump_counter(session: str | None) -> None:

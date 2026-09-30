@@ -19,15 +19,16 @@ frappe.ui.form.on("WhatsApp Session", {
 		}
 	},
 
-	// WaClient pushes nothing, so while a QR is on screen we ask for the state
-	// ourselves. The bridge does push, so it never needs this.
+	// While a QR is on screen, ask again. The bridge also pushes over realtime,
+	// but a cloud site can miss that push, and a QR rotates about once a minute.
 	watch_pairing(frm) {
 		clearInterval(frm.__agentx_poll);
 		frm.__agentx_poll = null;
 
 		if (frm.is_new()) return;
-		if (frm.doc.provider === "Self-Hosted Bridge") return;
 		if (frm.doc.state !== "Pairing") return;
+
+		const bridge = frm.doc.provider === "Self-Hosted Bridge";
 
 		frm.__agentx_poll = setInterval(() => {
 			// Stop as soon as the form is gone, or we would poll forever.
@@ -37,9 +38,16 @@ frappe.ui.form.on("WhatsApp Session", {
 				return;
 			}
 
-			frm.call({ doc: frm.doc, method: "refresh_status" })
+			frm.call({ doc: frm.doc, method: bridge ? "fetch_qr" : "refresh_status" })
 				.then((r) => {
-					const state = (r.message || {}).state;
+					const result = r.message || {};
+					if (bridge && result.qr && result.qr !== frm.doc.qr_data) {
+						frm.doc.qr_data = result.qr;
+						frm.doc.state = "Pairing";
+						frm.trigger("render_pairing");
+					}
+
+					const state = (result.state || "").toLowerCase();
 					if (state === "connected") {
 						clearInterval(frm.__agentx_poll);
 						frm.__agentx_poll = null;
@@ -51,7 +59,7 @@ frappe.ui.form.on("WhatsApp Session", {
 					clearInterval(frm.__agentx_poll);
 					frm.__agentx_poll = null;
 				});
-		}, 5000);
+		}, 4000);
 	},
 
 	onload(frm) {

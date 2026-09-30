@@ -80,6 +80,57 @@ it and run `agentx-bridge restart`, or re-run the installer with the new flags.
 Back the login up. Losing it means scanning the QR code again. A backup file
 *is* the login: whoever holds it can use the number.
 
+## Clean reinstall
+
+Use this when the bridge answers `Cannot GET /`, `agentx-bridge update` fails,
+or the checkout and containers no longer match. It removes the installed copy
+and the stored WhatsApp logins. Clients sign up again afterwards, and each
+number has to be linked again.
+
+If you still want the current logins, run `sudo agentx-bridge backup` first and
+restore it after the new install. Skip the backup if the data itself is what
+is corrupt.
+
+Stop whichever process is running. A Docker install lives in `/opt/agentx`
+unless you passed `--dir`. A native install is the systemd service of the same
+name.
+
+```bash
+# Docker (the default installer)
+cd /opt/agentx/bridge 2>/dev/null && sudo docker compose --profile https down -v --remove-orphans
+
+# Native, or a leftover service next to Docker
+sudo systemctl disable --now agentx-bridge 2>/dev/null || true
+sudo rm -f /etc/systemd/system/agentx-bridge.service
+sudo systemctl daemon-reload
+
+# Bench supervisor, if the bridge was added there by hand
+sudo supervisorctl stop agentx-bridge 2>/dev/null || true
+```
+
+Remove the checkout, the command, and any Compose volumes the `down` did not
+catch:
+
+```bash
+sudo rm -rf /opt/agentx
+sudo rm -f /usr/local/bin/agentx-bridge
+sudo docker volume ls -q | grep '^agentx-bridge_' | xargs -r sudo docker volume rm
+```
+
+Install it again. Leave `--site` out. Clients register from the page, or from
+**Sign up this site** on their ERPNext. Pass `--domain` only when this machine
+does not already host Frappe:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KiruiElisha/agent_x/main/bridge/install.sh \
+  | sudo bash -s -- --yes --domain whatsapp.site.com
+```
+
+On a bench that already has a domain, omit `--domain` and add `--native` if you
+do not want Docker. Open `https://whatsapp.site.com` (or
+`https://<this-site>/agentx-bridge`) and confirm the signup page is there, not
+`Cannot GET /`.
+
 ## Run it by hand
 
 For development, or a setup the installer does not cover:

@@ -35,19 +35,21 @@
 		.ok { color: var(--green); }
 		code, .token { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; }
 
-		.gate { max-width: 1040px; margin: 0 auto; padding: 28px 20px 72px; }
-		.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 36px; }
-		.brand { font-weight: 650; letter-spacing: -0.03em; }
-		.hero { max-width: 680px; margin-bottom: 28px; }
-		.eyebrow { font-size: 13px; color: var(--green); font-weight: 650; letter-spacing: 0.02em; }
-		.hero h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.04em; margin: 8px 0 12px; }
-		.hero p { color: var(--muted); font-size: 16px; }
-		.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
-		.step { padding: 16px; }
-		.step em { font-style: normal; font-size: 12px; color: var(--muted); }
-		.step strong { display: block; margin: 4px 0; }
-		.step p { color: var(--muted); font-size: 14px; }
-		.gate-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 16px; }
+		.gate { max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }
+		.stage { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr); gap: 36px; align-items: stretch; }
+		.brand { font-weight: 650; letter-spacing: -0.03em; font-size: 15px; }
+		.hero h1 { font-size: 36px; line-height: 1.12; letter-spacing: -0.04em; margin: 14px 0 12px; }
+		.hero p { color: var(--muted); font-size: 15px; }
+		.flow { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 0; }
+		.flow li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+		.flow b { font-size: 13px; color: var(--muted); font-weight: 650; }
+		.flow strong { display: block; }
+		.flow p { color: var(--muted); font-size: 14px; }
+		.gets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
+		.gets div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+		.gets span { display: block; font-size: 12px; color: var(--muted); }
+		.gets strong { font-size: 14px; }
+		.actions { display: flex; flex-direction: column; gap: 12px; }
 		.card h2 { font-size: 18px; }
 		.card .lead { color: var(--muted); margin-top: 6px; font-size: 14px; }
 		.card {
@@ -116,12 +118,14 @@
 		.pill.pairing { background: var(--amber-bg); color: var(--amber); }
 		.pill.logged_out, .pill.disconnected { background: var(--red-bg); color: var(--red); }
 		.split { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
+		.split.full { grid-template-columns: 1fr; }
 		.copyline { display: flex; gap: 8px; align-items: stretch; margin-top: 6px; }
+		.creds { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; }
 		.copyline code { flex: 1; padding: 10px; background: var(--paper); border-radius: 8px; }
 		img.qr { width: 220px; height: 220px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 		#pairing-code { font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 2px; margin-top: 8px; }
 		@media (max-width: 860px) {
-			.gate-grid, .stats, .split, .shell, .steps { grid-template-columns: 1fr; }
+			.stage, .stats, .split, .shell, .creds { grid-template-columns: 1fr; }
 			.hero h1 { font-size: 32px; }
 			.nav { flex-direction: row; overflow: auto; }
 			.nav strong { display: none; }
@@ -130,53 +134,62 @@
 </head>
 <body>
 <section id="login" class="gate">
-	<div class="topbar">
-		<div class="brand">WhatsApp API</div>
-		<a href="#signin-card" style="color:var(--ink);font-size:14px">Sign in</a>
-	</div>
-	<div class="hero">
-		<div class="eyebrow">Hosted WhatsApp connection</div>
-		<h1>Send and receive WhatsApp from your own app.</h1>
-		<p>This service holds the WhatsApp session. Your app talks to it over HTTP with an instance id and an access token. Inbound messages are posted to a webhook you choose. It works with any system that already uses those two fields, including apps built for WaClient. Nothing else has to be installed next to your app.</p>
-	</div>
-	<div class="steps">
-		<div class="card step">
-			<em>1</em>
-			<strong>Create a client</strong>
-			<p>Enter a short id and your email. You receive an access token and an instance id, shown here and sent to that address.</p>
-		</div>
-		<div class="card step">
-			<em>2</em>
-			<strong>Link the phone</strong>
-			<p>Scan the QR code, or type the pairing code under WhatsApp, Linked devices.</p>
-		</div>
-		<div class="card step">
-			<em>3</em>
-			<strong>Call the API</strong>
-			<p>Set your app’s API address to this site. Paste the instance id and access token. Point the webhook at the URL that should receive messages.</p>
-		</div>
-	</div>
-	<div class="gate-grid">
-		<div class="card">
-			<h2>Create a client</h2>
-			<p class="lead">Use any short id. The email is how you sign in later and how the token is delivered.</p>
-			<label for="signup-id">Client id</label>
-			<input id="signup-id" placeholder="acme" autocomplete="off" />
-			<label for="signup-email">Email</label>
-			<input id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" />
-			<div class="row" style="margin-top:14px">
-				<button id="signup" class="btn" type="button">Create and continue</button>
-				<span id="signup-error" class="err"></span>
+	<div class="stage">
+		<div class="hero">
+			<div class="brand">WhatsApp API</div>
+			<h1>Send and receive WhatsApp from your own app.</h1>
+			<p>This service keeps the phone session. Your app sends and receives over HTTP. You do not install anything beside the app. Anything that already uses an instance id and an access token, including a WaClient app, only needs this site as its API address.</p>
+			<ol class="flow">
+				<li>
+					<b>1</b>
+					<div>
+						<strong>Create a client</strong>
+						<p>A short id and your email. That email is how you sign in again.</p>
+					</div>
+				</li>
+				<li>
+					<b>2</b>
+					<div>
+						<strong>Link the phone</strong>
+						<p>Scan the QR code, or type the pairing code in WhatsApp under Linked devices.</p>
+					</div>
+				</li>
+				<li>
+					<b>3</b>
+					<div>
+						<strong>Paste two values into your app</strong>
+						<p>Set the API address to this site. Messages you should receive go to the webhook you register.</p>
+					</div>
+				</li>
+			</ol>
+			<div class="gets">
+				<div><span>From signup</span><strong>Instance ID</strong></div>
+				<div><span>From signup</span><strong>Access token</strong></div>
+				<div><span>You choose</span><strong>Webhook URL</strong></div>
 			</div>
 		</div>
-		<div class="card" id="signin-card">
-			<h2>Sign in</h2>
-			<p class="lead">The email from signup. The operator’s email opens the admin panel.</p>
-			<label for="login-email">Email</label>
-			<input id="login-email" type="email" autocomplete="email" placeholder="you@company.com" />
-			<div class="row" style="margin-top:14px">
-				<button id="signin" class="btn" type="button">Continue</button>
-				<span id="login-error" class="err"></span>
+		<div class="actions">
+			<div class="card">
+				<h2>Create a client</h2>
+				<p class="lead">The token is shown after this and sent to the email.</p>
+				<label for="signup-id">Client id</label>
+				<input id="signup-id" placeholder="acme" autocomplete="off" />
+				<label for="signup-email">Email</label>
+				<input id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" />
+				<div class="row" style="margin-top:14px">
+					<button id="signup" class="btn" type="button">Create and continue</button>
+					<span id="signup-error" class="err"></span>
+				</div>
+			</div>
+			<div class="card" id="signin-card">
+				<h2>Sign in</h2>
+				<p class="lead">The email you used above. The operator email opens the admin panel.</p>
+				<label for="login-email">Email</label>
+				<input id="login-email" type="email" autocomplete="email" placeholder="you@company.com" />
+				<div class="row" style="margin-top:14px">
+					<button id="signin" class="btn" type="button">Continue</button>
+					<span id="login-error" class="err"></span>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -213,12 +226,22 @@
 				<div class="card stat"><b id="stat-pairing">0</b><span>Pairing</span></div>
 				<div class="card stat"><b id="stat-idle">0</b><span>Not linked</span></div>
 			</div>
-			<div class="card" style="margin-top:16px">
-				<h2>Recent clients</h2>
-				<table>
-					<thead><tr><th>Client</th><th>Email</th><th>Created</th></tr></thead>
-					<tbody id="overview-clients"></tbody>
-				</table>
+			<div class="split" style="margin-top:16px">
+				<div class="card">
+					<h2>Recent clients</h2>
+					<table>
+						<thead><tr><th>Client</th><th>Email</th><th>Created</th></tr></thead>
+						<tbody id="overview-clients"></tbody>
+					</table>
+				</div>
+				<div class="card">
+					<h2>From here</h2>
+					<p style="color:var(--muted);font-size:14px;margin-top:8px">Issue a token for someone who will not sign up themselves, or open a number and link the phone.</p>
+					<div class="row" style="margin-top:16px">
+						<button class="btn" type="button" data-go="clients">Clients</button>
+						<button class="btn ghost" type="button" data-go="numbers">Numbers</button>
+					</div>
+				</div>
 			</div>
 		</section>
 
@@ -257,21 +280,28 @@
 		<section data-panel-view="numbers">
 			<div id="creds" class="card hidden" style="margin-bottom:16px">
 				<h2>Copy into your app</h2>
-				<p style="color:var(--muted);font-size:13px;margin-top:6px">Use these as the instance id and access token. The bridge URL is this site.</p>
-				<label>Instance ID</label>
-				<div class="copyline"><code id="cred-instance"></code><button class="btn ghost" type="button" data-copy="cred-instance">Copy</button></div>
-				<label>Access token</label>
-				<div class="copyline"><code id="cred-token"></code><button class="btn ghost" type="button" data-copy="cred-token">Copy</button></div>
+				<p style="color:var(--muted);font-size:13px;margin-top:6px">Paste these into the app. The API address is this site. Inbound messages go to the webhook you set while linking.</p>
+				<div class="creds">
+					<div>
+						<label>Instance ID</label>
+						<div class="copyline"><code id="cred-instance"></code><button class="btn ghost" type="button" data-copy="cred-instance">Copy</button></div>
+					</div>
+					<div>
+						<label>Access token</label>
+						<div class="copyline"><code id="cred-token"></code><button class="btn ghost" type="button" data-copy="cred-token">Copy</button></div>
+					</div>
+				</div>
 			</div>
-			<div class="split">
+			<div class="split" id="numbers-split">
 				<div class="card">
-					<h2>WhatsApp numbers</h2>
+					<h2 id="numbers-title">WhatsApp numbers</h2>
+					<p id="numbers-lead" style="color:var(--muted);font-size:13px;margin:6px 0 8px"></p>
 					<table>
-						<thead><tr><th>Instance ID</th><th>State</th><th>Number</th></tr></thead>
+						<thead id="session-head"><tr><th>Instance ID</th><th>State</th><th>Number</th></tr></thead>
 						<tbody id="session-rows"></tbody>
 					</table>
 				</div>
-				<div class="card">
+				<div class="card" id="link-panel">
 					<h2>Link a number</h2>
 					<label for="session-id">Instance ID</label>
 					<input id="session-id" value="main" />
@@ -307,6 +337,7 @@
 	let role = "tenant";
 	let poll = null;
 	let sessions = [];
+	let tenantRows = [];
 
 	function headers() {
 		return { Authorization: "Bearer " + activeToken, Accept: "application/json", "Content-Type": "application/json" };
@@ -379,21 +410,74 @@
 
 	async function loadTenants() {
 		const data = await call("GET", "/api/tenants");
-		const rows = data.tenants || [];
-		paintTenantTable(rows, $("tenant-rows"), true);
-		paintTenantTable(rows.slice(0, 8), $("overview-clients"), false);
-		$("stat-clients").textContent = String(rows.length);
+		tenantRows = data.tenants || [];
+		paintTenantTable(tenantRows, $("tenant-rows"), true);
+		paintTenantTable(tenantRows.slice(0, 8), $("overview-clients"), false);
+		$("stat-clients").textContent = String(tenantRows.length);
+	}
+
+	function sessionLine(row, admin) {
+		const state = escapeHtml(row.state || "");
+		const phone = escapeHtml(row.phone ? "+" + row.phone : "");
+		const instance = escapeHtml(row.session || "");
+		const client = escapeHtml(row.client || "");
+		const email = escapeHtml(row.email || "");
+		return `<tr data-session="${instance}">
+			${admin ? `<td>${client}</td><td>${email}</td>` : ""}
+			<td>${instance}</td>
+			<td><span class="pill ${state}">${state}</span></td>
+			<td>${phone}</td>
+		</tr>`;
 	}
 
 	async function loadSessions() {
+		if (role === "admin" && !tenantRows.length) await loadTenants();
 		const data = await call("GET", "/api/sessions");
 		sessions = data.sessions || [];
-		$("session-rows").innerHTML = sessions.map((row) => `
-			<tr data-session="${escapeHtml(row.session)}">
-				<td>${escapeHtml(row.session)}</td>
-				<td><span class="pill ${escapeHtml(row.state || "")}">${escapeHtml(row.state || "")}</span></td>
-				<td>${escapeHtml(row.phone ? "+" + row.phone : "")}</td>
-			</tr>`).join("") || `<tr><td colspan="3">No numbers started.</td></tr>`;
+		const admin = role === "admin";
+		$("numbers-split").classList.toggle("full", admin);
+		show("link-panel", !admin);
+		$("numbers-title").textContent = admin ? "All clients" : "WhatsApp numbers";
+		$("numbers-lead").textContent = admin
+			? "Every client on this bridge, and whether their WhatsApp number is connected."
+			: "";
+		$("session-head").innerHTML = admin
+			? "<tr><th>Client</th><th>Email</th><th>Instance ID</th><th>State</th><th>Number</th></tr>"
+			: "<tr><th>Instance ID</th><th>State</th><th>Number</th></tr>";
+
+		let lines;
+		if (!admin) {
+			lines = sessions;
+		} else {
+			const byTenant = new Map();
+			for (const session of sessions) {
+				const key = session.tenant || "";
+				if (!byTenant.has(key)) byTenant.set(key, []);
+				byTenant.get(key).push(session);
+			}
+			const seen = new Set();
+			lines = [];
+			for (const tenant of tenantRows) {
+				seen.add(tenant.id);
+				const owned = byTenant.get(tenant.id) || [];
+				if (!owned.length) {
+					lines.push({ client: tenant.id, email: tenant.email, session: "", state: "not started", phone: "" });
+				} else {
+					for (const session of owned) {
+						lines.push({ ...session, client: tenant.id, email: tenant.email });
+					}
+				}
+			}
+			for (const session of sessions) {
+				if (!session.tenant || seen.has(session.tenant)) continue;
+				lines.push({ ...session, client: "Operator", email: "" });
+			}
+			const rank = (state) => (state === "connected" ? 0 : state === "pairing" ? 1 : 2);
+			lines.sort((a, b) => rank(a.state) - rank(b.state));
+		}
+
+		$("session-rows").innerHTML = lines.map((row) => sessionLine(row, admin)).join("")
+			|| `<tr><td colspan="${admin ? 5 : 3}">No clients yet.</td></tr>`;
 		const count = (state) => sessions.filter((row) => row.state === state).length;
 		const connected = $("stat-connected");
 		if (connected) {
@@ -543,6 +627,9 @@
 
 	document.querySelectorAll("[data-panel]").forEach((button) => {
 		button.onclick = () => showPanel(button.dataset.panel);
+	});
+	document.querySelectorAll("[data-go]").forEach((button) => {
+		button.onclick = () => showPanel(button.dataset.go);
 	});
 
 	$("create-tenant").onclick = async () => {

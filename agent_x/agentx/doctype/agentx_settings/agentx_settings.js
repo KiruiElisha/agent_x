@@ -21,6 +21,11 @@ frappe.ui.form.on("AgentX Settings", {
 
 		if (frm.doc.whatsapp_provider === "Self-Hosted Bridge") {
 			frm.add_custom_button(
+				__("Sign up this site"),
+				() => signup_on_bridge(frm),
+				__("Bridge"),
+			);
+			frm.add_custom_button(
 				__("Issue Tenant Token"),
 				() => issue_tenant(frm),
 				__("Bridge"),
@@ -172,6 +177,24 @@ function test_connection(frm) {
 		}
 
 		wrapper.empty().append(bits.join(""));
+	});
+}
+
+function signup_on_bridge(frm) {
+	frm.call({
+		doc: frm.doc,
+		method: "signup_on_bridge",
+		freeze: true,
+		freeze_message: __("Creating your client…"),
+	}).then((r) => {
+		const result = r.message || {};
+		frappe.show_alert({
+			message: result.emailed
+				? __("This site is signed up. The token is saved here and was emailed to you.")
+				: __("This site is signed up. The token is saved in Bridge API Token."),
+			indicator: "green",
+		});
+		frm.reload_doc();
 	});
 }
 

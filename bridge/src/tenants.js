@@ -50,7 +50,7 @@ export function assertTenantId(id) {
 	return id;
 }
 
-export async function createTenant(id) {
+export async function createTenant(id, email = "") {
 	assertTenantId(id);
 	return locked(async () => {
 		const tenants = await read();
@@ -60,9 +60,9 @@ export async function createTenant(id) {
 			throw error;
 		}
 		const token = crypto.randomBytes(32).toString("hex");
-		tenants[id] = { token, created_at: new Date().toISOString() };
+		tenants[id] = { token, email: email || "", created_at: new Date().toISOString() };
 		await write(tenants);
-		return { id, token, created_at: tenants[id].created_at };
+		return { id, token, email: email || "", created_at: tenants[id].created_at };
 	});
 }
 

@@ -32,6 +32,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
+COPY public ./public
 
 # WhatsApp credentials live here. A named volume copies this ownership, so the
 # unprivileged user can write to it.

@@ -41,10 +41,17 @@ export const config = {
 
 	logLevel: process.env.BRIDGE_LOG_LEVEL || "info",
 
-	// The public page at the bridge hostname can mint a client without the
-	// master token. Set BRIDGE_SIGNUP=0 to leave that to the operator only.
+	// The public page at the bridge hostname. Clients sign up here; no Frappe
+	// site has to be named when the bridge is installed.
+	publicUrl: (process.env.BRIDGE_PUBLIC_URL || "").replace(/\/$/, ""),
 	signup: process.env.BRIDGE_SIGNUP !== "0",
 	maxTenants: Number(process.env.BRIDGE_MAX_TENANTS || 200),
+
+	smtpHost: process.env.BRIDGE_SMTP_HOST || "",
+	smtpPort: Number(process.env.BRIDGE_SMTP_PORT || 587),
+	smtpUser: process.env.BRIDGE_SMTP_USER || "",
+	smtpPassword: process.env.BRIDGE_SMTP_PASSWORD || "",
+	smtpFrom: process.env.BRIDGE_SMTP_FROM || process.env.BRIDGE_SMTP_USER || "",
 
 	// Baileys can only decrypt media while it still holds the message object,
 	// so small audio is downloaded at arrival and inlined in the webhook.

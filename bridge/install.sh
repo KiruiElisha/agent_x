@@ -224,9 +224,10 @@ fi
 
 if [ -n "$DOMAIN" ] && [ -z "$ALLOWED_IPS" ] && [ ! -f .install-mode ] && interactive; then
 	echo
-	echo "${BOLD}Lock the bridge to your Frappe server?${RESET} Recommended."
-	echo "Frappe Cloud shows the server's IP on the site's dashboard."
-	ALLOWED_IPS=$(ask "Frappe server IP(s), space separated, or empty to allow any:")
+	echo "${BOLD}Who may open the bridge page?${RESET}"
+	echo "Leave this empty so clients can sign up in the browser."
+	echo "Fill in addresses only if the page should be hidden from everyone else."
+	ALLOWED_IPS=$(ask "Allowed IPs, space separated, or empty for everyone:")
 fi
 
 # Commas or spaces, either works; the Caddyfile wants spaces.

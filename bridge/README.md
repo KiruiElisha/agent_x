@@ -184,10 +184,16 @@ do not share a WhatsApp link.
 ## Console
 
 Opening the bridge in a browser is the client page, the same idea as WaClient.
-On a hostname such as `https://whatsapp.site.com` a visitor creates a client,
-saves the token, links a WhatsApp number, and sets their ERPNext webhook.
-They paste that token into AgentX Settings on their site. The master token is
-only for the operator view, which can also issue tokens.
+`https://whatsapp.site.com` shows the signup form. A visitor enters a client id
+and an email address. The page shows the token, and if SMTP is set the same
+details are emailed. Nothing about their Frappe site is asked at install time.
+
+On Frappe Cloud, set **Bridge URL** to that hostname, choose Self-Hosted Bridge,
+and press **Sign up this site**. The token is saved on that site, the webhook
+is registered, and the email goes to the user who pressed the button. Then
+open a WhatsApp Session and press Connect.
+
+The master token is only for the operator view on the same page.
 
 On this server the page is `http://127.0.0.1:8787`. From anywhere else it is
 the public hostname, or:

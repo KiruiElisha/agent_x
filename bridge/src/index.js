@@ -20,8 +20,15 @@ app.use(express.json({ limit: "25mb" }));
 // Unauthenticated, so a process manager can check liveness.
 app.get("/health", (req, res) => res.json({ ok: true, sessions: manager.list().length }));
 
-// The onboarding page. Opening the bridge URL shows this; the API stays under /api.
-app.use(express.static(publicDir));
+// The onboarding page. A missing file used to fall through to "Cannot GET /".
+app.get(["/", "/index.html"], (_req, res) => {
+	res.sendFile(path.join(publicDir, "index.html"), (error) => {
+		if (error) {
+			logger.error({ err: error.message }, "onboarding page is not in this install");
+			res.status(500).type("text/plain").send("The onboarding page is missing from this bridge install.");
+		}
+	});
+});
 
 app.use("/api", buildRouter(manager));
 app.use(errorHandler);

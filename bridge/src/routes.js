@@ -5,6 +5,7 @@ import express from "express";
 import { requireAdmin, requireToken } from "./auth.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
+import { mailConfigured, publicOrigin, sendWelcome } from "./mail.js";
 import { createTenant, deleteTenant, listTenants } from "./tenants.js";
 
 /** Turns a rejected promise into a JSON error instead of an unhandled rejection. */
@@ -27,12 +28,26 @@ export function buildRouter(manager) {
 			if (!config.signup) {
 				return res.status(403).json({ ok: false, error: "signup is disabled" });
 			}
+			const email = String((req.body || {}).email || "").trim().toLowerCase();
+			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+				return res.status(400).json({ ok: false, error: "A valid email is required" });
+			}
 			const existing = await listTenants();
 			if (existing.length >= config.maxTenants) {
 				return res.status(403).json({ ok: false, error: "this bridge is not taking new clients" });
 			}
-			const created = await createTenant((req.body || {}).id);
-			return res.json({ ok: true, ...created });
+			const created = await createTenant((req.body || {}).id, email);
+			const origin = publicOrigin(req);
+			let emailed = false;
+			if (mailConfigured()) {
+				try {
+					await sendWelcome({ to: email, id: created.id, token: created.token, origin });
+					emailed = true;
+				} catch (error) {
+					logger.warn({ err: error.message, client: created.id }, "could not email the client token");
+				}
+			}
+			return res.json({ ok: true, emailed, bridge_url: origin, ...created });
 		}),
 	);
 

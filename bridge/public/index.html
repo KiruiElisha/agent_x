@@ -79,6 +79,9 @@
 			<p class="hint">Use any short name. You get a token for this bridge, then you link a WhatsApp number and point it at your ERPNext site. No operator has to create you first.</p>
 			<label for="signup-id">Client id</label>
 			<input id="signup-id" placeholder="acme" autocomplete="off" />
+			<label for="signup-email">Email</label>
+			<input id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" />
+			<p class="hint">The token is shown here and sent to this address.</p>
 			<div class="row" style="margin-top:10px">
 				<button id="signup" type="button">Create and continue</button>
 				<span id="signup-error" class="err"></span>
@@ -302,10 +305,16 @@
 			const response = await fetch(api("/api/signup"), {
 				method: "POST",
 				headers: { Accept: "application/json", "Content-Type": "application/json" },
-				body: JSON.stringify({ id: $("signup-id").value.trim().toLowerCase() }),
+				body: JSON.stringify({
+					id: $("signup-id").value.trim().toLowerCase(),
+					email: $("signup-email").value.trim(),
+				}),
 			});
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok || data.ok === false) throw new Error(data.error || ("HTTP " + response.status));
+			$("welcome").querySelector("p").textContent = data.emailed
+				? "The token was emailed to you. It is also shown below, and it is not shown again."
+				: "Save this token. Mail is not configured on this bridge, so this page is the only copy.";
 			$("welcome-token").textContent = data.token || "";
 			show("welcome", true);
 			await signIn(data.token || "");

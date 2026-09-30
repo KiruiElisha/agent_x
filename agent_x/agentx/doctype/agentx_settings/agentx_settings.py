@@ -332,6 +332,54 @@ class AgentXSettings(Document):
 
 		return BridgeTransport(None, self).create_tenant(tenant_id)
 
+	@frappe.whitelist()
+	def signup_on_bridge(self) -> dict:
+		"""Create this site's client on the public bridge and store the token.
+
+		No master token and no install command. The signed-in user's email
+		receives the same details the bridge page would show.
+		"""
+		if (self.whatsapp_provider or "WaClient") != "Self-Hosted Bridge":
+			frappe.throw(_("Switch the provider to Self-Hosted Bridge first."))
+
+		base = (self.bridge_url or "").strip()
+		if not base:
+			frappe.throw(
+				_("Set the Bridge URL to the public bridge, for example https://whatsapp.site.com.")
+			)
+
+		email = frappe.db.get_value("User", frappe.session.user, "email") or ""
+		if "@" not in email:
+			frappe.throw(_("Your user has no email address, so the bridge cannot send the client details."))
+
+		from agent_x.core.transport.bridge import signup_client
+
+		created = None
+		client_id = _client_id()
+		last_error = None
+		for candidate in (client_id, f"{client_id}-{frappe.generate_hash(length=4)}"):
+			try:
+				created = signup_client(base, candidate, email, timeout=self.request_timeout or 30)
+				break
+			except Exception as exc:
+				last_error = exc
+				if "already exists" not in str(exc).lower():
+					raise
+		if not created:
+			raise last_error
+
+		if not self.get_password("webhook_secret", raise_exception=False):
+			self.webhook_secret = frappe.generate_hash(length=32)
+		self.bridge_api_token = created["token"]
+		self.save()
+
+		registered = self.register_webhook()
+		return {
+			"id": created.get("id"),
+			"emailed": bool(created.get("emailed")),
+			"webhook_verified": bool(registered.get("verified")),
+		}
+
 	# ------------------------------------------------------- the connection
 	#
 	# A WhatsApp Session is still the record that holds a linked number, but
@@ -457,6 +505,15 @@ def match_number(number: str, rows) -> bool:
 	from agent_x.core.phone import same_number
 
 	return any(same_number(number, row.phone_number) for row in rows)
+
+
+def _client_id() -> str:
+	"""A bridge client id taken from this site's name."""
+	import re
+
+	raw = (getattr(frappe.local, "site", None) or "site").split(".", 1)[0].lower()
+	cleaned = re.sub(r"[^a-z0-9]", "", raw)[:20]
+	return cleaned or "site"
 
 
 def host_is_private(url: str) -> bool:

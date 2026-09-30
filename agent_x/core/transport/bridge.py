@@ -235,3 +235,36 @@ class BridgeTransport(Transport):
 		"""Mint a token another site can log in with. Master token only."""
 		body = self.request("POST", "tenants", {"id": (tenant_id or "").strip().lower()})
 		return {"id": body.get("id"), "token": body.get("token")}
+
+
+def signup_client(base_url: str, client_id: str, email: str, timeout: int = 30) -> dict:
+	"""Create a client on a public bridge. No master token is involved.
+
+	This is how a Frappe Cloud site signs itself up: the bridge page and this
+	call are the same endpoint.
+	"""
+	url = (base_url or "").strip().rstrip("/")
+	if not url:
+		frappe.throw(_("Set the Bridge URL first. That is the public address, for example https://whatsapp.site.com."))
+
+	try:
+		response = requests.post(
+			f"{url}/api/signup",
+			json={"id": client_id, "email": email},
+			headers={"Accept": "application/json"},
+			timeout=timeout,
+		)
+	except requests.RequestException as exc:
+		raise TransportError(_("Could not reach the WhatsApp bridge at {0}: {1}").format(url, exc)) from exc
+
+	try:
+		body = response.json()
+	except ValueError:
+		raise TransportError(
+			_("The bridge returned a non-JSON response ({0}).").format(response.status_code)
+		)
+
+	if response.status_code >= 400 or not body.get("ok", True):
+		raise TransportError(_("The bridge refused the request: {0}").format(body.get("error") or response.status_code))
+
+	return body

@@ -54,14 +54,6 @@ export function buildRouter(manager) {
 	);
 
 	router.post(
-		"/admin",
-		wrap(async (req, res) => {
-			const saved = await setAdminEmail((req.body || {}).email);
-			return res.json({ ok: true, configured: true, email: saved });
-		}),
-	);
-
-	router.post(
 		"/login",
 		wrap(async (req, res) => {
 			const email = String((req.body || {}).email || "").trim().toLowerCase();
@@ -175,6 +167,15 @@ export function buildRouter(manager) {
 	);
 
 	router.use(requireToken);
+
+	router.post(
+		"/admin",
+		requireAdmin,
+		wrap(async (req, res) => {
+			const saved = await setAdminEmail((req.body || {}).email);
+			return res.json({ ok: true, configured: true, email: saved });
+		}),
+	);
 
 	router.post(
 		"/tenants",

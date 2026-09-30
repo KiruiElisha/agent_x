@@ -191,7 +191,9 @@
 			</div>
 			<div class="card hidden" id="admin-setup">
 				<h2>Set the operator email</h2>
-				<p class="lead">This address opens the admin panel. It is saved on the server, so it does not have to be set in a terminal. You only do this once.</p>
+				<p class="lead">Paste the bridge API token from the installer, then the email that should open the admin panel. A request without that token is refused, including from another website.</p>
+				<label for="admin-token">Bridge API token</label>
+				<input id="admin-token" type="password" autocomplete="off" />
 				<label for="admin-email">Operator email</label>
 				<input id="admin-email" type="email" autocomplete="email" placeholder="you@company.com" />
 				<div class="row" style="margin-top:14px">
@@ -842,7 +844,11 @@
 		try {
 			const response = await fetch(api("/api/admin"), {
 				method: "POST",
-				headers: { Accept: "application/json", "Content-Type": "application/json" },
+				headers: {
+					Accept: "application/json",
+					"Content-Type": "application/json",
+					Authorization: "Bearer " + $("admin-token").value.trim(),
+				},
 				body: JSON.stringify({ email: $("admin-email").value.trim().toLowerCase() }),
 			});
 			const data = await response.json().catch(() => ({}));

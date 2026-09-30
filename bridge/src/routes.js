@@ -3,6 +3,7 @@
 import express from "express";
 
 import { requireAdmin, requireToken } from "./auth.js";
+import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { createTenant, deleteTenant, listTenants } from "./tenants.js";
 
@@ -17,6 +18,23 @@ function missing(res, id) {
 
 export function buildRouter(manager) {
 	const router = express.Router();
+
+	// Anyone who can open the bridge hostname can create their own client.
+	// The token comes back once. It cannot see anyone else's numbers.
+	router.post(
+		"/signup",
+		wrap(async (req, res) => {
+			if (!config.signup) {
+				return res.status(403).json({ ok: false, error: "signup is disabled" });
+			}
+			const existing = await listTenants();
+			if (existing.length >= config.maxTenants) {
+				return res.status(403).json({ ok: false, error: "this bridge is not taking new clients" });
+			}
+			const created = await createTenant((req.body || {}).id);
+			return res.json({ ok: true, ...created });
+		}),
+	);
 
 	router.use(requireToken);
 

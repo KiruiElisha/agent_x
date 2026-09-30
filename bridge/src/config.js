@@ -41,6 +41,11 @@ export const config = {
 
 	logLevel: process.env.BRIDGE_LOG_LEVEL || "info",
 
+	// The public page at the bridge hostname can mint a client without the
+	// master token. Set BRIDGE_SIGNUP=0 to leave that to the operator only.
+	signup: process.env.BRIDGE_SIGNUP !== "0",
+	maxTenants: Number(process.env.BRIDGE_MAX_TENANTS || 200),
+
 	// Baileys can only decrypt media while it still holds the message object,
 	// so small audio is downloaded at arrival and inlined in the webhook.
 	// Anything larger is skipped rather than buffered.

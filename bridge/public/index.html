@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>AgentX Bridge</title>
+	<style>
+		:root {
+			color-scheme: light;
+			--ink: #1c1917;
+			--muted: #57534e;
+			--line: #e7e5e4;
+			--paper: #fafaf9;
+			--card: #fff;
+			--green: #3f6212;
+			--red: #9f1239;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+			color: var(--ink);
+			background: var(--paper);
+		}
+		main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+		h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; }
+		h2 { font-size: 16px; margin: 28px 0 10px; }
+		p, .hint { color: var(--muted); }
+		.card {
+			background: var(--card);
+			border: 1px solid var(--line);
+			border-radius: 10px;
+			padding: 16px;
+			margin-top: 12px;
+		}
+		label { display: block; font-size: 13px; margin: 10px 0 4px; }
+		input {
+			width: 100%;
+			padding: 8px 10px;
+			border: 1px solid var(--line);
+			border-radius: 6px;
+			font: inherit;
+		}
+		.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+		button, .button {
+			font: inherit;
+			border: 1px solid var(--ink);
+			background: var(--ink);
+			color: #fff;
+			border-radius: 6px;
+			padding: 7px 12px;
+			cursor: pointer;
+		}
+		button.ghost, .button.ghost { background: #fff; color: var(--ink); }
+		button:disabled { opacity: 0.5; cursor: default; }
+		code, .token {
+			font-family: ui-monospace, monospace;
+			font-size: 13px;
+			word-break: break-all;
+		}
+		.token { display: block; padding: 8px; background: var(--paper); border-radius: 6px; }
+		.badge { font-size: 12px; border: 1px solid var(--line); border-radius: 99px; padding: 2px 8px; }
+		.err { color: var(--red); }
+		.ok { color: var(--green); }
+		img.qr { width: 240px; height: 240px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+		.hidden { display: none; }
+	</style>
+</head>
+<body>
+<main>
+	<h1>AgentX Bridge</h1>
+	<p>Onboard a client and pair their WhatsApp number. ERPNext still receives the messages.</p>
+
+	<section id="login">
+		<div class="card">
+			<h2 style="margin-top:0">Create a client</h2>
+			<p class="hint">Use any short name. You get a token for this bridge, then you link a WhatsApp number and point it at your ERPNext site. No operator has to create you first.</p>
+			<label for="signup-id">Client id</label>
+			<input id="signup-id" placeholder="acme" autocomplete="off" />
+			<div class="row" style="margin-top:10px">
+				<button id="signup" type="button">Create and continue</button>
+				<span id="signup-error" class="err"></span>
+			</div>
+		</div>
+		<div class="card">
+			<label for="token">Already have a token</label>
+			<input id="token" type="password" autocomplete="off" placeholder="Master token, or a client token" />
+			<div class="row" style="margin-top:10px">
+				<button id="signin" type="button">Continue</button>
+				<span id="login-error" class="err"></span>
+			</div>
+		</div>
+	</section>
+
+	<section id="app" class="hidden">
+		<div id="welcome" class="card hidden">
+			<p class="ok" style="margin:0">Save this token. It is not shown again, and it is what ERPNext uses as the Bridge API Token.</p>
+			<code id="welcome-token" class="token" style="margin-top:8px"></code>
+		</div>
+		<div class="row">
+			<span id="who" class="badge"></span>
+			<button id="signout" class="ghost" type="button">Sign out</button>
+			<button id="back" class="ghost hidden" type="button">Back to operator</button>
+		</div>
+
+		<div id="tenants">
+			<h2>Clients</h2>
+			<p class="hint">A token is shown once. Give the client the Bridge URL and that token. They paste both into AgentX Settings, or you can pair the number here for them.</p>
+			<div class="card">
+				<label for="tenant-id">Client id</label>
+				<input id="tenant-id" placeholder="acme" />
+				<div class="row" style="margin-top:10px">
+					<button id="create-tenant" type="button">Issue token</button>
+				</div>
+				<div id="issued" class="hidden" style="margin-top:12px">
+					<div class="hint">Bridge URL</div>
+					<code id="issued-url" class="token"></code>
+					<div class="hint" style="margin-top:8px">Token</div>
+					<code id="issued-token" class="token"></code>
+					<div class="row" style="margin-top:10px">
+						<button id="act-as" class="ghost" type="button">Pair a number for this client</button>
+					</div>
+				</div>
+			</div>
+			<div class="card">
+				<table>
+					<thead><tr><th>Client</th><th>Created</th></tr></thead>
+					<tbody id="tenant-rows"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<h2>WhatsApp numbers</h2>
+		<div class="card">
+			<label for="session-id">Session name</label>
+			<input id="session-id" placeholder="main" value="main" />
+			<label for="webhook-url">Webhook URL</label>
+			<input id="webhook-url" placeholder="https://client.example.com/api/method/agent_x.core.webhook.receive" />
+			<label for="webhook-secret">Webhook secret</label>
+			<input id="webhook-secret" type="password" autocomplete="off" />
+			<div class="row" style="margin-top:12px">
+				<button id="start" type="button">Show QR</button>
+				<button id="pair" class="ghost" type="button">Pairing code</button>
+				<button id="refresh" class="ghost" type="button">Refresh</button>
+				<button id="logout" class="ghost" type="button">Log out number</button>
+			</div>
+			<label for="phone">Phone for a pairing code</label>
+			<input id="phone" placeholder="254712345678" />
+			<p id="session-msg"></p>
+			<div id="pairing-code" class="hidden" style="font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 3px;"></div>
+			<img id="qr" class="qr hidden" alt="WhatsApp QR code" />
+		</div>
+		<div class="card">
+			<table>
+				<thead><tr><th>Session</th><th>State</th><th>Number</th></tr></thead>
+				<tbody id="session-rows"></tbody>
+			</table>
+		</div>
+	</section>
+</main>
+<script>
+	const $ = (id) => document.getElementById(id);
+	const mount = location.pathname.replace(/\/$/, "");
+	const api = (path) => mount + path;
+
+	let operatorToken = sessionStorage.getItem("agentx-operator") || "";
+	let activeToken = sessionStorage.getItem("agentx-token") || "";
+	let role = "tenant";
+	let poll = null;
+
+	function headers() {
+		return { Authorization: "Bearer " + activeToken, Accept: "application/json", "Content-Type": "application/json" };
+	}
+
+	async function call(method, path, body) {
+		const response = await fetch(api(path), {
+			method,
+			headers: headers(),
+			body: body ? JSON.stringify(body) : undefined,
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok || data.ok === false) {
+			throw new Error(data.error || ("HTTP " + response.status));
+		}
+		return data;
+	}
+
+	function show(id, on) { $(id).classList.toggle("hidden", !on); }
+
+	async function signIn(token) {
+		activeToken = token.trim();
+		if (!activeToken) throw new Error("A token is required");
+		let tenants = null;
+		try {
+			tenants = await call("GET", "/api/tenants");
+		} catch (error) {
+			if (/unauthorised/i.test(error.message)) throw new Error("The bridge rejected that token");
+			if (!/master token|403/i.test(error.message)) throw error;
+			await call("GET", "/api/sessions");
+			role = "tenant";
+		}
+		if (tenants) role = "admin";
+		sessionStorage.setItem("agentx-token", activeToken);
+		if (role === "admin") {
+			operatorToken = activeToken;
+			sessionStorage.setItem("agentx-operator", operatorToken);
+		}
+		show("login", false);
+		show("app", true);
+		$("who").textContent = role === "admin" ? "Operator" : "Client";
+		show("tenants", role === "admin");
+		show("back", Boolean(operatorToken) && activeToken !== operatorToken);
+		if (role === "admin") await loadTenants();
+		await loadSessions();
+	}
+
+	async function loadTenants() {
+		const data = await call("GET", "/api/tenants");
+		$("tenant-rows").innerHTML = (data.tenants || []).map((row) =>
+			`<tr><td>${escapeHtml(row.id)}</td><td>${escapeHtml(row.created_at || "")}</td></tr>`
+		).join("") || `<tr><td colspan="2">No clients yet.</td></tr>`;
+	}
+
+	async function loadSessions() {
+		const data = await call("GET", "/api/sessions");
+		$("session-rows").innerHTML = (data.sessions || []).map((row) =>
+			`<tr><td>${escapeHtml(row.session)}</td><td>${escapeHtml(row.state)}</td><td>${escapeHtml(row.phone || "")}</td></tr>`
+		).join("") || `<tr><td colspan="3">No numbers started.</td></tr>`;
+	}
+
+	function callbackBody() {
+		const body = {};
+		const url = $("webhook-url").value.trim();
+		const secret = $("webhook-secret").value.trim();
+		if (url) body.webhook_url = url;
+		if (secret) body.webhook_secret = secret;
+		return body;
+	}
+
+	function paintSession(data) {
+		const state = data.state || "";
+		$("session-msg").textContent = state + (data.phone ? " · +" + data.phone : "") + (data.last_error ? " · " + data.last_error : "");
+		$("session-msg").className = state === "connected" ? "ok" : "";
+		if (data.qr) {
+			$("qr").src = data.qr;
+			show("qr", true);
+		}
+		if (data.pairing_code) {
+			$("pairing-code").textContent = data.pairing_code;
+			show("pairing-code", true);
+		}
+		if (state === "connected") {
+			show("qr", false);
+			stopPoll();
+		} else if (state === "pairing" || data.qr) {
+			startPoll();
+		}
+	}
+
+	function startPoll() {
+		if (poll) return;
+		poll = setInterval(async () => {
+			try {
+				const data = await call("GET", "/api/sessions/" + encodeURIComponent(sessionId()) + "/qr");
+				paintSession(data);
+				if (data.state === "connected") await loadSessions();
+			} catch (error) {
+				stopPoll();
+			}
+		}, 4000);
+	}
+
+	function stopPoll() {
+		clearInterval(poll);
+		poll = null;
+	}
+
+	function sessionId() {
+		const id = $("session-id").value.trim().toLowerCase();
+		if (!id) throw new Error("A session name is required");
+		return id;
+	}
+
+	function escapeHtml(value) {
+		return String(value).replace(/[&<>"']/g, (ch) => ({
+			"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+		}[ch]));
+	}
+
+	$("signin").onclick = async () => {
+		$("login-error").textContent = "";
+		show("welcome", false);
+		try { await signIn($("token").value); }
+		catch (error) { $("login-error").textContent = error.message; }
+	};
+
+	$("signup").onclick = async () => {
+		$("signup-error").textContent = "";
+		try {
+			const response = await fetch(api("/api/signup"), {
+				method: "POST",
+				headers: { Accept: "application/json", "Content-Type": "application/json" },
+				body: JSON.stringify({ id: $("signup-id").value.trim().toLowerCase() }),
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok || data.ok === false) throw new Error(data.error || ("HTTP " + response.status));
+			$("welcome-token").textContent = data.token || "";
+			show("welcome", true);
+			await signIn(data.token || "");
+		} catch (error) {
+			$("signup-error").textContent = error.message;
+		}
+	};
+
+	$("signout").onclick = () => {
+		stopPoll();
+		sessionStorage.removeItem("agentx-token");
+		sessionStorage.removeItem("agentx-operator");
+		activeToken = "";
+		operatorToken = "";
+		show("app", false);
+		show("login", true);
+	};
+
+	$("back").onclick = () => signIn(operatorToken).catch((error) => {
+		$("session-msg").textContent = error.message;
+		$("session-msg").className = "err";
+	});
+
+	$("create-tenant").onclick = async () => {
+		try {
+			const data = await call("POST", "/api/tenants", { id: $("tenant-id").value.trim().toLowerCase() });
+			$("issued-url").textContent = location.origin + mount;
+			$("issued-token").textContent = data.token || "";
+			$("issued").dataset.token = data.token || "";
+			show("issued", true);
+			await loadTenants();
+		} catch (error) {
+			$("session-msg").textContent = error.message;
+			$("session-msg").className = "err";
+		}
+	};
+
+	$("act-as").onclick = () => {
+		const token = $("issued").dataset.token;
+		if (!token) return;
+		signIn(token).catch((error) => {
+			$("session-msg").textContent = error.message;
+			$("session-msg").className = "err";
+		});
+	};
+
+	async function withSession(work) {
+		$("session-msg").className = "";
+		$("session-msg").textContent = "Asking WhatsApp…";
+		try {
+			paintSession(await work());
+			await loadSessions();
+		} catch (error) {
+			$("session-msg").textContent = error.message;
+			$("session-msg").className = "err";
+		}
+	}
+
+	$("start").onclick = () => withSession(() =>
+		call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/start", callbackBody()));
+
+	$("pair").onclick = () => withSession(() =>
+		call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/pair", { ...callbackBody(), phone: $("phone").value.trim() }));
+
+	$("refresh").onclick = () => withSession(() =>
+		call("GET", "/api/sessions/" + encodeURIComponent(sessionId()) + "/qr"));
+
+	$("logout").onclick = () => withSession(async () => {
+		stopPoll();
+		show("qr", false);
+		show("pairing-code", false);
+		return call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/logout");
+	});
+
+	$("session-rows").onclick = (event) => {
+		const cell = event.target.closest("td");
+		if (cell && cell.cellIndex === 0) $("session-id").value = cell.textContent;
+	};
+
+	if (activeToken) {
+		signIn(activeToken).catch(() => show("login", true));
+	}
+</script>
+</body>
+</html>

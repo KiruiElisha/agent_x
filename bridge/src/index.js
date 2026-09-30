@@ -1,11 +1,16 @@
 /** Bridge entry point. */
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import express from "express";
 
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { buildRouter, errorHandler } from "./routes.js";
 import { SessionManager } from "./session.js";
+
+const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 
 const manager = new SessionManager();
 const app = express();
@@ -14,6 +19,9 @@ app.use(express.json({ limit: "25mb" }));
 
 // Unauthenticated, so a process manager can check liveness.
 app.get("/health", (req, res) => res.json({ ok: true, sessions: manager.list().length }));
+
+// The onboarding page. Opening the bridge URL shows this; the API stays under /api.
+app.use(express.static(publicDir));
 
 app.use("/api", buildRouter(manager));
 app.use(errorHandler);

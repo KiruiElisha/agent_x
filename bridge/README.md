@@ -181,16 +181,35 @@ The master token (`BRIDGE_API_TOKEN`) can use every session. A tenant token can
 only use the sessions it has started. Two clients who both name a session `main`
 do not share a WhatsApp link.
 
+## Console
+
+Opening the bridge in a browser is the client page, the same idea as WaClient.
+On a hostname such as `https://whatsapp.site.com` a visitor creates a client,
+saves the token, links a WhatsApp number, and sets their ERPNext webhook.
+They paste that token into AgentX Settings on their site. The master token is
+only for the operator view, which can also issue tokens.
+
+On this server the page is `http://127.0.0.1:8787`. From anywhere else it is
+the public hostname, or:
+
+```text
+https://<this-site>/agentx-bridge
+```
+
+Set `BRIDGE_SIGNUP=0` in the bridge environment to turn public signup off.
+`BRIDGE_MAX_TENANTS` (default 200) is how many clients the page will create.
+
 ## Several sites, including ERPNext on another server
 
 The bridge stays on `127.0.0.1`. Any site on this bench where AgentX is installed
-publishes it at:
+publishes the same console and API at:
 
 ```text
 https://<that-site>/agentx-bridge
 ```
 
-No extra domain. A cloud ERPNext site sets:
+No extra domain. You can issue the token from the console, or from **Issue
+Tenant Token** in AgentX Settings on this server. A cloud ERPNext site sets:
 
 - WhatsApp Provider: Self-Hosted Bridge
 - Bridge URL: `https://<that-site>/agentx-bridge`

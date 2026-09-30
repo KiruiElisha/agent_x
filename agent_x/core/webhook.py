@@ -107,7 +107,7 @@ def verify_signature(settings, raw: bytes) -> bool:
 		warn_once(
 			"AgentX webhook misconfigured",
 			"No Webhook Secret is set, so every bridge event is being refused. "
-			"Set one in AgentX Settings and the same value as BRIDGE_WEBHOOK_SECRET.",
+			"Set one in AgentX Settings, then press Register Webhook or Connect so the bridge uses it.",
 		)
 		return False
 

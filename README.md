@@ -20,8 +20,10 @@ put it is the only real deployment decision, and AgentX supports both answers.
 
 **On Frappe Cloud, the session cannot live on the bench itself**, because a
 managed bench has nowhere to run a persistent process. Either let WaClient host
-it, or run the bridge on a small server of your own with a domain name, so
-Frappe Cloud can reach it over HTTPS; see [bridge/README.md](bridge/README.md).
+it, or run the bridge on a server you control. If that server already hosts
+Frappe with a domain, cloud sites reach it at `https://<that-site>/agentx-bridge`
+and do not need a second domain. A bridge on a machine with no Frappe site
+needs a domain of its own. See [bridge/README.md](bridge/README.md).
 Everything else — the agent, the policy gate, the audit trail, the QR in Desk —
 is identical either way, and switching later is a dropdown in AgentX Settings,
 not a rewrite.
@@ -58,9 +60,13 @@ curl -fsSL https://raw.githubusercontent.com/KiruiElisha/agent_x/main/bridge/ins
 ```
 
 It prints the Bridge URL, API Token, and Webhook Secret to fill in here; see
-[bridge/README.md](bridge/README.md) for the options. `--site` must be the same
-address as the read-only **Webhook URL** here, minus its path. Unsigned events
-are refused, so the Webhook Secret has to match the bridge's exactly.
+[bridge/README.md](bridge/README.md) for the options. `--site` is this site's
+address, and it is the fallback webhook. Unsigned events are refused. Paste
+the printed secret into **Webhook Secret**, then press **Register Webhook** or
+**Connect** so the bridge signs with it. Another ERPNext site does not share
+that secret: on this server press **Issue Tenant Token**, and on the other
+site paste that token, set Bridge URL to `https://<this-site>/agentx-bridge`,
+and set a Webhook Secret of its own.
 
 Press **Test Connection** either way.
 
@@ -81,8 +87,10 @@ scan the QR that appears in the form.
 If scanning is awkward, **Use Pairing Code** gives you an eight character code
 to type into WhatsApp under Linked Devices instead.
 
-The bridge pushes its QR over realtime. WaClient has no push, so the form polls
-every five seconds while a QR is on screen and stops as soon as it connects.
+Both providers refresh the QR while it is on screen, so a late webhook does not
+leave the form empty. The code stops as soon as the phone connects. QR expiry
+and message times follow the time zone in System Settings on the site that
+receives them.
 
 ## What the assistant can do
 

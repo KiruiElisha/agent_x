@@ -37,8 +37,10 @@ Usage: install.sh [options]
   --site URL          Your Frappe site, e.g. https://erp.example.com.
                       Inbound WhatsApp messages are posted there.
   --domain NAME       Serve the bridge over HTTPS at this name, with automatic
-                      certificates. Needed when Frappe runs on another server
-                      (Frappe Cloud included). The name must point at this server.
+                      certificates. Use it when this machine does not already
+                      host a Frappe site. If a site here has a domain and
+                      AgentX installed, leave this out: that site publishes
+                      the bridge at https://<site>/agentx-bridge.
   --allow-ip ADDR     Only accept calls from this address or CIDR range; repeat
                       for several. Use your Frappe server's public IP.
   --native            Run under Node and systemd instead of Docker. Suits a
@@ -210,8 +212,9 @@ fi
 if [ "$MODE" = docker ] && [ -z "$DOMAIN" ] && [ ! -f .install-mode ] && interactive; then
 	echo
 	echo "${BOLD}Is Frappe on this same server?${RESET}"
-	echo "If not (Frappe Cloud, or another server), the bridge needs a domain name"
-	echo "pointing at this server so Frappe can reach it over HTTPS."
+	echo "If a site here already has a domain and AgentX, leave this empty."
+	echo "Other sites, including Frappe Cloud, then use https://<that-site>/agentx-bridge."
+	echo "A domain of its own is only needed when this machine does not host Frappe."
 	DOMAIN=$(ask "Bridge domain, or leave empty if Frappe runs here:")
 fi
 
@@ -439,8 +442,10 @@ press Connect to scan the QR code.
 EOF
 
 if [ -z "$DOMAIN" ]; then
-	echo "${DIM}The Bridge URL above only works from this server. If Frappe runs elsewhere,"
-	echo "re-run with --domain bridge.example.com.${RESET}"
+	echo "${DIM}The Bridge URL above only works from this server."
+	echo "Other sites reach it at https://<this-site>/agentx-bridge. Issue a tenant"
+	echo "token from AgentX Settings here and paste it into the other site."
+	echo "A hostname of its own (re-run with --domain) is only for a machine with no Frappe.${RESET}"
 	echo
 fi
 

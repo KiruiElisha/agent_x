@@ -15,8 +15,22 @@ Pick the line that matches where Frappe runs. Each installs the bridge, generate
 its secrets, starts it, and prints the three values to paste into **AgentX
 Settings → Connection**.
 
-**Frappe on another server** (Frappe Cloud, or a separate box). Point a DNS
-name at this server first, and open ports 80 and 443:
+**Frappe on this same server.** Nothing needs to be public, and you do not need a
+second domain. The installer keeps the bridge on loopback:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KiruiElisha/agent_x/main/bridge/install.sh \
+  | sudo bash -s -- --site https://erp.example.com
+```
+
+The Bridge URL is then `http://127.0.0.1:8787`. On a bench server you may prefer
+`--native`, which runs it with Node under systemd instead of Docker. Other
+ERPNext sites, including Frappe Cloud, call this same bridge through a site
+that already has AgentX and a domain. See
+[Several sites](#several-sites-including-erpnext-on-another-server).
+
+**The bridge on its own server**, with no Frappe site on it. Point a DNS name
+at this server first, and open ports 80 and 443:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KiruiElisha/agent_x/main/bridge/install.sh \
@@ -26,16 +40,9 @@ curl -fsSL https://raw.githubusercontent.com/KiruiElisha/agent_x/main/bridge/ins
 This runs the bridge in Docker behind Caddy, which gets and renews the HTTPS
 certificate by itself. Add `--allow-ip <Frappe server IP>` so nothing else can
 reach the bridge. Frappe Cloud shows the server's IP on the site dashboard.
-
-**Frappe on this same server.** Nothing needs to be public:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/KiruiElisha/agent_x/main/bridge/install.sh \
-  | sudo bash -s -- --site https://erp.example.com
-```
-
-The Bridge URL is then `http://127.0.0.1:8787`. On a bench server you may prefer
-`--native`, which runs it with Node under systemd instead of Docker.
+`--site` is the fallback webhook for that one site. Each additional site
+registers its own URL when it connects, so this flag does not have to name
+every tenant.
 
 **From a clone**, run the same thing without curl. With no options it asks for
 what it needs:
@@ -93,6 +100,8 @@ They fetch it over HTTPS for this one command, without changing your git config.
 `npm start` reads `.env`. The bridge refuses to start without
 `BRIDGE_API_TOKEN` or `BRIDGE_WEBHOOK_SECRET`: Frappe rejects unsigned events,
 so a bridge without a secret would drop every message.
+`BRIDGE_WEBHOOK_SECRET` signs the fallback webhook. A site that registers its
+own secret is signed with that instead.
 
 Keep `BRIDGE_HOST` on `127.0.0.1`. Anyone who can reach the port and has the
 token can send from the linked number.
@@ -116,8 +125,10 @@ stderr_logfile=/home/frappe/frappe-bench/logs/agentx-bridge.error.log
 
 ### Behind nginx
 
-A native install listens on `127.0.0.1:8787` only. If Frappe is on another
-server, publish it through the nginx you already run:
+A native install listens on `127.0.0.1:8787` only. When a Frappe site on this
+same machine already has a domain, you do not need the block below: that site
+serves `/agentx-bridge` and forwards it to this port. Use nginx only when the
+bridge has to answer on a name of its own:
 
 ```nginx
 server {
@@ -197,7 +208,16 @@ token. That site does not go through `/agentx-bridge`.
 
 ## Events posted to Frappe
 
-`qr`, `qr_expired`, `connected`, `disconnected`, `logged_out`, `message`, `receipt`.
+`qr`, `qr_expired`, `pairing_code`, `connected`, `disconnected`, `logged_out`,
+`message`, `receipt`.
 
-Each body carries `event`, `session`, and `at`, and is signed with
-`X-AgentX-Signature: sha256=<hmac of the raw body>`.
+Each body carries `event`, `session`, and `at`. `at` and message timestamps are
+UTC. Frappe stores them in the time zone from that site's System Settings.
+The body is signed with `X-AgentX-Signature: sha256=<hmac of the raw body>`,
+using that session's webhook secret, or `BRIDGE_WEBHOOK_SECRET` when the
+session has not registered one.
+
+Pairing works two ways. Connect returns a QR and Desk keeps asking for a fresh
+one until it is scanned or the phone links. `POST /api/sessions/:id/pair` with
+`{"phone": "2547..."}` returns an eight-character code, shown as `ABCD-EFGH`,
+which is typed under Linked Devices → Link with phone number.

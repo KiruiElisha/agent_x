@@ -104,7 +104,10 @@ def credentials(settings) -> list:
 			check(
 				"Webhook secret set",
 				bool(settings.get_password("webhook_secret", raise_exception=False)),
-				fix=_("Set it to the same value as BRIDGE_WEBHOOK_SECRET, or inbound events are refused."),
+				fix=_(
+					"Set a Webhook Secret, then press Register Webhook or Connect. "
+					"The bridge signs this site's events with that secret."
+				),
 			)
 		)
 
@@ -164,6 +167,17 @@ def webhook(settings) -> list:
 		host in ours for host in ("localhost", "127.0.0.1", ".local", "0.0.0.0")
 	)
 	if local:
+		from agent_x.agentx.doctype.agentx_settings.agentx_settings import host_is_private
+
+		# The bridge on this machine can post to a loopback site. A hosted
+		# provider, or a bridge published on a public URL, cannot.
+		bridge_here = (settings.whatsapp_provider or "") == "Self-Hosted Bridge" and host_is_private(
+			settings.bridge_url or ""
+		)
+		if bridge_here:
+			out.append(check("Webhook stays on this server", True, ours))
+			return out
+
 		out.append(
 			check(
 				"Webhook URL is public",

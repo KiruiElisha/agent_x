@@ -113,7 +113,7 @@ export function buildRouter(manager) {
 	router.post(
 		"/sessions/:id/pair",
 		wrap(async (req, res) => {
-			const session = await manager.start(req.params.id, req.access, req.body || {});
+			const session = await manager.open(req.params.id, req.access, req.body || {});
 			const paired = await session.requestPairingCode((req.body || {}).phone);
 			return res.json({ ok: true, session: session.publicId, ...paired });
 		}),

@@ -129,7 +129,7 @@ export function buildWaClientRouter(manager) {
 	}));
 
 	router.all(["/get_paircode", "/relogin_paircode"], one(async (req, res, who, id) => {
-		const session = await manager.start(id, who.access, { webhook_style: "waclient" });
+		const session = await manager.open(id, who.access, { webhook_style: "waclient" });
 		const paired = await session.requestPairingCode(who.body.phone);
 		return res.json(ok({ paircode: paired.pairing_code, instance_id: id }));
 	}));

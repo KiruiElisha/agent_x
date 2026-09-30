@@ -287,10 +287,10 @@ function pairing_code(frm) {
 				const result = r.message || {};
 				dialog.hide();
 
-				if (!result.supported) {
+				if (!result.supported || !result.pairing_code) {
 					frappe.msgprint({
 						title: __("Not available"),
-						message: __("This provider does not offer pairing codes. Scan the QR instead."),
+						message: __("No pairing code came back. Scan the QR instead, or check that this session uses the self-hosted bridge."),
 						indicator: "orange",
 					});
 					return;

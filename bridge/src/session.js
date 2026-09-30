@@ -265,6 +265,16 @@ class Session {
 		if (version) options.version = version;
 
 		this.sock = makeWASocket(options);
+		if (state.creds?.registered && this.pendingPair) {
+			this.pairTask = Promise.reject(
+				httpError(400, "This number is already linked. Press Connect."),
+			);
+			this.pairTask.catch(() => {});
+		} else if (this.pendingPair) {
+			this.pairTask = this.issuePairingCode(this.pendingPair);
+		} else {
+			this.pairTask = Promise.resolve(null);
+		}
 
 		this.sock.ev.on("creds.update", saveCreds);
 		this.sock.ev.on("connection.update", (update) => {
@@ -492,7 +502,8 @@ class Session {
 
 	/**
 	 * Eight-character code typed on the phone, instead of scanning.
-	 * The socket has to be up and waiting for a QR before WhatsApp will issue one.
+	 * WhatsApp only issues one in the first moments after the socket opens.
+	 * Waiting for a QR first takes the scan path, and then no code comes back.
 	 */
 	async requestPairingCode(phone) {
 		const digits = String(phone || "").replace(/\D/g, "");
@@ -502,18 +513,35 @@ class Session {
 			throw httpError(400, "This session is already connected");
 		}
 
-		if (!this.sock) await this.connect();
+		this.pendingPair = digits;
+		if (this.sock) {
+			await this.stop();
+			this.closing = false;
+		}
+		await this.connect();
 
-		const ready = await this.waitFor(() => this.qr || this.state === "connected", 15000);
+		try {
+			const code = await this.pairTask;
+			if (!code) throw httpError(400, "WhatsApp did not return a pairing code");
+			return { pairing_code: code, phone: digits, state: this.state };
+		} finally {
+			this.pendingPair = null;
+		}
+	}
+
+	async issuePairingCode(digits) {
+		// The socket needs a moment to finish its handshake before it will
+		// accept a pairing-code request. Asking immediately is rejected.
+		await new Promise((resolve) => setTimeout(resolve, 2500));
+		if (!this.sock) throw httpError(400, "WhatsApp closed before a code was issued");
 		if (this.state === "connected") throw httpError(400, "This session is already connected");
-		if (!ready || !this.sock) throw httpError(400, "WhatsApp did not offer a pairing code in time");
 
 		const code = await this.sock.requestPairingCode(digits);
 		this.pairingCode = formatPairingCode(code);
 		this.state = "pairing";
 		logger.info({ session: this.id }, "pairing code issued");
 		await this.emit("pairing_code", { pairing_code: this.pairingCode, phone: digits });
-		return { pairing_code: this.pairingCode, phone: digits, state: this.state };
+		return this.pairingCode;
 	}
 
 	async getCatalog(jid, { limit, cursor } = {}) {

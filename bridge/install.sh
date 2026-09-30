@@ -34,8 +34,10 @@ Install or upgrade the AgentX WhatsApp bridge.
 
 Usage: install.sh [options]
 
-  --site URL          Your Frappe site, e.g. https://erp.example.com.
-                      Inbound WhatsApp messages are posted there.
+  --site URL          Optional fallback site, e.g. https://erp.example.com.
+                      Messages for a session that has not registered its own
+                      webhook are posted there. Leave it out for a bridge that
+                      only serves sites which register themselves.
   --domain NAME       Serve the bridge over HTTPS at this name, with automatic
                       certificates. Use it when this machine does not already
                       host a Frappe site. If a site here has a domain and
@@ -202,10 +204,12 @@ if [ -z "$WEBHOOK_URL" ] && [ -n "$SITE_URL" ]; then
 fi
 [ -n "$WEBHOOK_URL" ] || WEBHOOK_URL=$(env_get BRIDGE_WEBHOOK_URL)
 
-if [ -z "$WEBHOOK_URL" ]; then
+if [ -z "$WEBHOOK_URL" ] && interactive; then
 	echo
-	echo "${BOLD}Where is your Frappe site?${RESET} Inbound WhatsApp messages are posted to it."
-	SITE_URL=$(ask "Site URL (e.g. https://erp.example.com):")
+	echo "${BOLD}Fallback site, optional.${RESET} Each site registers its own webhook when it"
+	echo "connects, which is how several tenants share this bridge. Name a site here"
+	echo "only if one of them should receive events before it has registered."
+	SITE_URL=$(ask "Site URL, or leave empty:")
 	[ -n "$SITE_URL" ] && WEBHOOK_URL="${SITE_URL%/}$WEBHOOK_PATH"
 fi
 
@@ -235,8 +239,8 @@ case "$WEBHOOK_URL" in
 esac
 
 if [ -z "$WEBHOOK_URL" ]; then
-	warn "No Frappe site given. The bridge will run but cannot deliver messages"
-	warn "until BRIDGE_WEBHOOK_URL is set in $ENV_FILE (then: agentx-bridge restart)."
+	warn "No fallback site. Events go only to the webhook each session registers"
+	warn "when that site connects or presses Register Webhook."
 fi
 
 if [ "$MODE" = native ] && [ -n "$DOMAIN" ]; then
@@ -267,8 +271,9 @@ cat >"$ENV_FILE" <<EOF
 # in AgentX Settings.
 BRIDGE_API_TOKEN=$API_TOKEN
 
-# Where inbound events go, signed with the secret. The secret is the same as
-# Webhook Secret in AgentX Settings.
+# Fallback for a session that has not registered its own webhook. Empty is
+# normal on a multi-tenant bridge: each site sends its URL when it connects.
+# BRIDGE_WEBHOOK_SECRET signs that fallback. A registered site uses its own.
 BRIDGE_WEBHOOK_URL=$WEBHOOK_URL
 BRIDGE_WEBHOOK_SECRET=$WEBHOOK_SECRET
 
@@ -450,7 +455,7 @@ if [ -z "$DOMAIN" ]; then
 fi
 
 cat <<EOF
-Messages are delivered to: ${WEBHOOK_URL:-${YELLOW}(not set)${RESET}}
+Fallback webhook: ${WEBHOOK_URL:-${YELLOW}(none — each site registers its own)${RESET}}
 
 Manage it with ${BOLD}agentx-bridge${RESET}: status, logs, restart, config, backup, update.
 Settings live in $ENV_FILE

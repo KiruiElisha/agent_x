@@ -122,10 +122,18 @@
 		.copyline { display: flex; gap: 8px; align-items: stretch; margin-top: 6px; }
 		.creds { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; }
 		.copyline code { flex: 1; padding: 10px; background: var(--paper); border-radius: 8px; }
-		img.qr { width: 220px; height: 220px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
-		#pairing-code { font: 600 28px/1.2 ui-monospace, monospace; letter-spacing: 2px; margin-top: 8px; }
+		.status-banner { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+		.status-phone { font-size: 28px; letter-spacing: -0.03em; margin-top: 4px; }
+		.link-grid { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+		.methods { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+		.method { min-height: 280px; display: flex; flex-direction: column; }
+		.well { margin-top: 16px; min-height: 240px; display: grid; place-items: center; background: var(--paper); border-radius: 12px; padding: 12px; }
+		img.qr { width: 220px; height: 220px; background: #fff; border-radius: 12px; }
+		#pairing-code { font: 600 32px/1.2 ui-monospace, monospace; letter-spacing: 3px; }
+		.actions-row { display: flex; gap: 8px; margin-top: 14px; }
+		.actions-row .btn { flex: 1; }
 		@media (max-width: 860px) {
-			.stage, .stats, .split, .shell, .creds { grid-template-columns: 1fr; }
+			.stage, .stats, .split, .shell, .creds, .link-grid, .methods { grid-template-columns: 1fr; }
 			.hero h1 { font-size: 32px; }
 			.nav { flex-direction: row; overflow: auto; }
 			.nav strong { display: none; }
@@ -241,26 +249,11 @@
 				<div>
 					<div class="card">
 						<h2>From here</h2>
-						<p style="color:var(--muted);font-size:14px;margin-top:8px">Issue a token for someone who will not sign up themselves, or open a number and link the phone.</p>
+						<p style="color:var(--muted);font-size:14px;margin-top:8px">Issue a token for someone who will not sign up themselves, or open Numbers to link the service WhatsApp.</p>
 						<div class="row" style="margin-top:16px">
 							<button class="btn" type="button" data-go="clients">Clients</button>
-							<button class="btn ghost" type="button" data-go="numbers">Numbers</button>
+							<button class="btn ghost" type="button" data-go="numbers">Link the service number</button>
 						</div>
-					</div>
-					<div class="card" id="service-card" style="margin-top:16px">
-						<h2>Service WhatsApp</h2>
-						<p style="color:var(--muted);font-size:14px;margin-top:8px">This number sends verification codes and other messages from the bridge. Its id stays on the server.</p>
-						<p id="service-state" style="margin-top:10px"></p>
-						<label for="service-phone">Phone, for a pairing code</label>
-						<input id="service-phone" placeholder="254712345678" />
-						<div class="row" style="margin-top:12px">
-							<button id="service-qr" class="btn" type="button">Show QR</button>
-							<button id="service-pair" class="btn ghost" type="button">Pairing code</button>
-							<button id="service-out" class="btn danger" type="button">Log out</button>
-						</div>
-						<p id="service-msg" style="margin-top:10px"></p>
-						<div id="service-code" class="hidden" style="font:600 28px/1.2 ui-monospace,monospace;letter-spacing:2px;margin-top:8px"></div>
-						<img id="service-qr-img" class="qr hidden" alt="Service WhatsApp QR code" />
 					</div>
 				</div>
 			</div>
@@ -313,35 +306,51 @@
 					</div>
 				</div>
 			</div>
-			<div class="split" id="numbers-split">
-				<div class="card">
-					<h2 id="numbers-title">WhatsApp numbers</h2>
-					<p id="numbers-lead" style="color:var(--muted);font-size:13px;margin:6px 0 8px"></p>
-					<table>
-						<thead id="session-head"><tr><th>Instance ID</th><th>State</th><th>Number</th></tr></thead>
-						<tbody id="session-rows"></tbody>
-					</table>
+			<div class="card status-banner">
+				<div>
+					<div id="numbers-title" style="font-size:13px;color:var(--muted)">WhatsApp</div>
+					<div id="status-phone" class="status-phone">No number linked</div>
+					<p id="numbers-lead" style="color:var(--muted);font-size:14px;margin-top:4px"></p>
 				</div>
-				<div class="card" id="link-panel">
-					<h2>Link a number</h2>
-					<label for="session-id" class="hidden">Instance ID</label>
-					<input id="session-id" type="hidden" value="" />
+				<div class="row">
+					<button id="refresh" class="btn ghost" type="button">Refresh</button>
+					<button id="logout" class="btn danger" type="button">Log out</button>
+				</div>
+			</div>
+			<div class="link-grid" id="link-panel">
+				<div class="card">
+					<h2 id="link-title">Where messages go</h2>
+					<p class="lead">Optional until you are ready to receive messages in your app.</p>
 					<label for="webhook-url">Webhook URL</label>
 					<input id="webhook-url" placeholder="https://erp.example.com/api/method/..." />
 					<label for="webhook-secret">Webhook secret</label>
 					<input id="webhook-secret" type="password" autocomplete="off" />
-					<label for="phone">Phone, for a pairing code</label>
-					<input id="phone" placeholder="254712345678" />
-					<div class="row" style="margin-top:12px">
-						<button id="start" class="btn" type="button">Show QR</button>
-						<button id="pair" class="btn ghost" type="button">Pairing code</button>
-						<button id="refresh" class="btn ghost" type="button">Refresh</button>
-						<button id="logout" class="btn danger" type="button">Log out</button>
-					</div>
-					<p id="session-msg" style="margin-top:10px"></p>
-					<div id="pairing-code" class="hidden"></div>
-					<img id="qr" class="qr hidden" alt="WhatsApp QR code" />
+					<input id="session-id" type="hidden" value="" />
+					<p id="session-msg" style="margin-top:12px"></p>
 				</div>
+				<div class="methods">
+					<div class="card method">
+						<h2>Scan a QR code</h2>
+						<p class="lead">On the phone open WhatsApp, then Linked devices, then Link a device.</p>
+						<div class="actions-row"><button id="start" class="btn" type="button">Show QR</button></div>
+						<div class="well"><img id="qr" class="qr hidden" alt="WhatsApp QR code" /></div>
+					</div>
+					<div class="card method">
+						<h2>Use a pairing code</h2>
+						<p class="lead">On the phone open Linked devices, then Link with phone number.</p>
+						<label for="phone">Phone with country code</label>
+						<input id="phone" placeholder="254712345678" />
+						<div class="actions-row"><button id="pair" class="btn" type="button">Get code</button></div>
+						<div class="well"><div id="pairing-code" class="hidden"></div></div>
+					</div>
+				</div>
+			</div>
+			<div class="card" id="client-table" style="margin-top:16px">
+				<h2>All clients</h2>
+				<table>
+					<thead id="session-head"><tr><th>State</th><th>Number</th></tr></thead>
+					<tbody id="session-rows"></tbody>
+				</table>
 			</div>
 		</section>
 	</div>
@@ -416,6 +425,7 @@
 			});
 		}
 		await loadSessions();
+		bindLinker();
 		if (role !== "admin") renderCreds(activeToken, sessions);
 	}
 
@@ -455,12 +465,17 @@
 		const data = await call("GET", "/api/sessions");
 		sessions = data.sessions || [];
 		const admin = role === "admin";
-		$("numbers-split").classList.toggle("full", admin);
-		show("link-panel", !admin);
-		$("numbers-title").textContent = admin ? "All clients" : "WhatsApp numbers";
+		show("client-table", admin);
+		show("link-panel", true);
+		const mine = admin
+			? sessions.find((row) => row.session === "service")
+			: sessions.find((row) => row.session && row.session !== "service");
+		$("numbers-title").textContent = admin ? "Service number" : "Your number";
+		$("status-phone").textContent = mine?.phone ? "+" + mine.phone : "No number linked";
 		$("numbers-lead").textContent = admin
-			? "Every client on this bridge, and whether their WhatsApp number is connected."
-			: "";
+			? (mine?.state ? mine.state + ". This number sends verification codes." : "Link this number to send verification codes.")
+			: (mine?.state || "Link the phone that belongs to this client.");
+		$("link-title").textContent = admin ? "Service messages" : "Where messages go";
 		$("session-head").innerHTML = admin
 			? "<tr><th>Client</th><th>Email</th><th>State</th><th>Number</th></tr>"
 			: "<tr><th>State</th><th>Number</th></tr>";
@@ -498,7 +513,7 @@
 		}
 
 		$("session-rows").innerHTML = lines.map((row) => sessionLine(row, admin)).join("")
-			|| `<tr><td colspan="${admin ? 5 : 3}">No clients yet.</td></tr>`;
+			|| `<tr><td colspan="${admin ? 4 : 2}">No clients yet.</td></tr>`;
 		const count = (state) => sessions.filter((row) => row.state === state).length;
 		const connected = $("stat-connected");
 		if (connected) {
@@ -600,10 +615,6 @@
 			sessionStorage.setItem("agentx-operator-email", email);
 		}
 		await signIn(data.token || "");
-		if (data.role !== "admin") {
-			renderCreds(data.token, (data.instances || []).map((row) => ({ session: row.instance_id })));
-		}
-		if (data.role === "admin") refreshService();
 	}
 
 	$("signin").onclick = async () => {
@@ -679,43 +690,49 @@
 
 	const SERVICE = "service";
 
-	async function refreshService() {
-		try {
-			const data = await call("GET", "/api/sessions/" + SERVICE + "/status");
-			$("service-state").textContent = [data.state, data.phone ? "+" + data.phone : ""].filter(Boolean).join(" · ");
-			$("service-state").className = data.state === "connected" ? "ok" : "";
-		} catch (error) {
-			$("service-state").textContent = "Not linked";
-			$("service-state").className = "";
-		}
-	}
-
 	async function serviceAction(path, body) {
-		$("service-msg").textContent = "Asking WhatsApp…";
+		$("session-msg").textContent = "Asking WhatsApp…";
+		$("session-msg").className = "";
 		try {
 			const data = await call("POST", "/api/sessions/" + SERVICE + path, body || {});
-			if (data.qr) {
-				$("service-qr-img").src = data.qr;
-				show("service-qr-img", true);
-			}
-			if (data.pairing_code) {
-				$("service-code").textContent = data.pairing_code;
-				show("service-code", true);
-			}
-			$("service-msg").textContent = data.state || "Ready";
-			await refreshService();
+			paintSession(data);
+			await loadSessions();
 		} catch (error) {
-			$("service-msg").textContent = error.message;
+			$("session-msg").textContent = error.message;
+			$("session-msg").className = "err";
 		}
 	}
 
-	$("service-qr").onclick = () => serviceAction("/start");
-	$("service-pair").onclick = () => serviceAction("/pair", { phone: $("service-phone").value.trim() });
-	$("service-out").onclick = () => {
-		show("service-qr-img", false);
-		show("service-code", false);
-		serviceAction("/logout");
-	};
+	function bindLinker() {
+		if (role === "admin") {
+			$("start").onclick = () => serviceAction("/start");
+			$("pair").onclick = () => serviceAction("/pair", { phone: $("phone").value.trim() });
+			$("refresh").onclick = () => {
+				call("GET", "/api/sessions/" + SERVICE + "/status").then((data) => {
+					paintSession(data);
+					loadSessions();
+				}).catch((error) => { $("session-msg").textContent = error.message; });
+			};
+			$("logout").onclick = () => {
+				show("qr", false);
+				show("pairing-code", false);
+				serviceAction("/logout");
+			};
+			return;
+		}
+		$("start").onclick = () => withSession(() =>
+			call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/start", callbackBody()));
+		$("pair").onclick = () => withSession(() =>
+			call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/pair", { ...callbackBody(), phone: $("phone").value.trim() }));
+		$("refresh").onclick = () => withSession(() =>
+			call("GET", "/api/sessions/" + encodeURIComponent(sessionId()) + "/qr"));
+		$("logout").onclick = () => withSession(async () => {
+			stopPoll();
+			show("qr", false);
+			show("pairing-code", false);
+			return call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/logout");
+		});
+	}
 
 	document.querySelectorAll("[data-panel]").forEach((button) => {
 		button.onclick = () => showPanel(button.dataset.panel);
@@ -769,19 +786,6 @@
 			$("session-msg").className = "err";
 		}
 	}
-
-	$("start").onclick = () => withSession(() =>
-		call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/start", callbackBody()));
-	$("pair").onclick = () => withSession(() =>
-		call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/pair", { ...callbackBody(), phone: $("phone").value.trim() }));
-	$("refresh").onclick = () => withSession(() =>
-		call("GET", "/api/sessions/" + encodeURIComponent(sessionId()) + "/qr"));
-	$("logout").onclick = () => withSession(async () => {
-		stopPoll();
-		show("qr", false);
-		show("pairing-code", false);
-		return call("POST", "/api/sessions/" + encodeURIComponent(sessionId()) + "/logout");
-	});
 
 	$("session-rows").onclick = (event) => {
 		const row = event.target.closest("tr[data-session]");

@@ -483,6 +483,7 @@
 			$("welcome-token").textContent = [data.instance_id, data.token].filter(Boolean).join("\n");
 			show("welcome", true);
 			activeEmail = $("signup-email").value.trim().toLowerCase();
+			sessionStorage.setItem("agentx-email", activeEmail);
 			await signIn(data.token || "");
 			renderCreds(data.token, [{ session: data.instance_id }]);
 		} catch (error) {
@@ -581,11 +582,13 @@
 	document.body.addEventListener("click", async (event) => {
 		const id = event.target?.dataset?.copy;
 		if (!id) return;
+		const button = event.target;
+		const label = button.textContent;
 		const text = $(id)?.textContent || "";
 		try {
 			await navigator.clipboard.writeText(text);
-			event.target.textContent = "Copied";
-			setTimeout(() => { event.target.textContent = event.target.textContent.startsWith("Copy") ? event.target.dataset.label || "Copy" : "Copy"; }, 1200);
+			button.textContent = "Copied";
+			setTimeout(() => { button.textContent = label; }, 1200);
 		} catch (error) {
 			$("session-msg").textContent = "Select the value and copy it manually.";
 		}

@@ -178,7 +178,7 @@
 		<div class="hero">
 			<div class="brand">WhatsApp API</div>
 			<h1>Send and receive WhatsApp from your own app.</h1>
-			<p>This service keeps the phone session. Your app sends and receives over HTTP. You do not install anything beside the app. Anything that already uses an instance id and an access token, including a WaClient app, only needs this site as its API address.</p>
+			<p>This service keeps the phone session. Your app sends and receives over HTTP. You do not install anything beside the app. Anything that already uses an instance id and an access token only needs this site as its API address. One client can link more than one phone. Each phone is its own instance.</p>
 			<div id="plan" class="plan hidden">
 				<span id="plan-kicker">Subscription</span>
 				<strong id="plan-price"></strong>
@@ -322,7 +322,7 @@
   -d '{"to":"254712345678","text":"Hello"}'</pre>
 			<p class="lead">A picture uses <code>media</code> with a <code>url</code> and an optional <code>caption</code>. An unpaid client returns 402 when a subscription is required. A disabled client returns 403.</p>
 			<div class="endpoint"><span class="verb">POST</span><code>/send</code></div>
-			<p class="lead">Same call an existing WaClient app already makes. Put the token and instance id in the body. The path is on this site, not under <code>/api</code>.</p>
+			<p class="lead">Same request with the token and instance id in the body. The path is on this site, not under <code>/api</code>. Call it again to link another phone. The earlier numbers stay connected.</p>
 			<pre>curl -s -X POST <span data-origin></span>/send \
   -H 'Content-Type: application/json' \
   -d '{"access_token":"TOKEN","instance_id":"INSTANCE","number":"254712345678","message":"Hello"}'</pre>
@@ -345,13 +345,13 @@
 			<table>
 				<thead><tr><th>Call</th><th>Purpose</th></tr></thead>
 				<tbody>
-					<tr><td>GET /health</td><td>Liveness. No token</td></tr>
+					<tr><td>POST /api/sessions</td><td>Client token. Creates another instance for a second phone. Numbers already linked stay connected</td></tr>
 					<tr><td>GET /api/sessions</td><td>State of this token's numbers</td></tr>
 					<tr><td>POST /api/sessions/INSTANCE/check</td><td>Body <code>{"number"}</code>. Is this phone on WhatsApp</td></tr>
 					<tr><td>POST /api/sessions/INSTANCE/logout</td><td>Unlink the phone and forget the session</td></tr>
-					<tr><td>POST /create_instance</td><td>WaClient shape. Body <code>access_token</code>. Returns a new instance id</td></tr>
-					<tr><td>POST /get_qrcode</td><td>WaClient shape. Body <code>access_token</code> and <code>instance_id</code></td></tr>
-					<tr><td>POST /set_webhook</td><td>WaClient shape. Body <code>webhook_url</code></td></tr>
+					<tr><td>POST /create_instance</td><td>Body <code>access_token</code>. Creates another instance. Each one is a separate phone</td></tr>
+					<tr><td>POST /get_qrcode</td><td>Body <code>access_token</code> and <code>instance_id</code></td></tr>
+					<tr><td>POST /set_webhook</td><td>Body <code>webhook_url</code> for that instance</td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -527,7 +527,10 @@
 				</div>
 			</div>
 			<div class="card" id="client-table" style="margin-top:16px">
-				<h2>All clients</h2>
+				<div class="row" style="justify-content:space-between">
+					<h2 id="numbers-list-title">All clients</h2>
+					<button id="add-number" class="btn hidden" type="button">Add a number</button>
+				</div>
 				<table>
 					<thead id="session-head"><tr><th>State</th><th>Number</th></tr></thead>
 					<tbody id="session-rows"></tbody>
@@ -710,7 +713,7 @@
 		const client = escapeHtml(row.client || "");
 		const email = escapeHtml(row.email || "");
 		return `<tr data-session="${instance}">
-			${admin ? `<td>${client}</td><td>${email}</td>` : ""}
+			${admin ? `<td>${client}</td><td>${email}</td>` : `<td>${instance}</td>`}
 			<td><span class="pill ${state}">${state}</span></td>
 			<td>${phone}</td>
 		</tr>`;
@@ -721,20 +724,23 @@
 		const data = await call("GET", "/api/sessions");
 		sessions = data.sessions || [];
 		const admin = role === "admin";
-		show("client-table", admin);
+		show("client-table", true);
+		show("add-number", !admin);
+		$("numbers-list-title").textContent = admin ? "All clients" : "Your numbers";
 		show("link-panel", true);
+		const selected = $("session-id").value;
 		const mine = admin
 			? sessions.find((row) => row.session === "service")
-			: sessions.find((row) => row.session && row.session !== "service");
+			: sessions.find((row) => row.session === selected) || sessions.find((row) => row.session && row.session !== "service");
 		$("numbers-title").textContent = admin ? "Service number" : "Your number";
 		$("status-phone").textContent = mine?.phone ? "+" + mine.phone : "No number linked";
 		$("numbers-lead").textContent = admin
 			? (mine?.state ? mine.state + ". This number sends verification codes." : "Link this number to send verification codes.")
-			: (mine?.state || "Link the phone that belongs to this client.");
+			: (mine?.state || "Link a phone. Add another number when you need a second phone. The others stay linked.");
 		$("link-title").textContent = admin ? "Service messages" : "Where messages go";
 		$("session-head").innerHTML = admin
 			? "<tr><th>Client</th><th>Email</th><th>State</th><th>Number</th></tr>"
-			: "<tr><th>State</th><th>Number</th></tr>";
+			: "<tr><th>Instance</th><th>State</th><th>Number</th></tr>";
 
 		let lines;
 		if (!admin) {
@@ -769,7 +775,7 @@
 		}
 
 		$("session-rows").innerHTML = lines.map((row) => sessionLine(row, admin)).join("")
-			|| `<tr><td colspan="${admin ? 4 : 2}">No clients yet.</td></tr>`;
+			|| `<tr><td colspan="${admin ? 4 : 3}">No numbers yet.</td></tr>`;
 		const count = (state) => sessions.filter((row) => row.state === state).length;
 		const connected = $("stat-connected");
 		if (connected) {
@@ -827,6 +833,8 @@
 	}
 
 	function sessionId() {
+		const chosen = ($("session-id").value || "").trim();
+		if (chosen) return chosen;
 		const known = (sessions.find((row) => row.session && row.session !== "service") || {}).session
 			|| ($("cred-instance") && $("cred-instance").textContent)
 			|| "";
@@ -1052,9 +1060,26 @@
 
 	$("session-rows").onclick = (event) => {
 		const row = event.target.closest("tr[data-session]");
-		if (!row) return;
+		if (!row || !row.dataset.session) return;
 		$("session-id").value = row.dataset.session;
+		const cred = $("cred-instance");
+		if (cred && role !== "admin") cred.textContent = row.dataset.session;
 		showPanel("numbers");
+	};
+
+	$("add-number").onclick = async () => {
+		$("session-msg").textContent = "";
+		try {
+			const created = await call("POST", "/api/sessions");
+			$("session-id").value = created.instance_id || "";
+			if ($("cred-instance")) $("cred-instance").textContent = created.instance_id || "";
+			await loadSessions();
+			$("session-msg").textContent = "New instance " + (created.instance_id || "") + ". Link this phone without affecting the others.";
+			$("session-msg").className = "ok";
+		} catch (error) {
+			$("session-msg").textContent = error.message;
+			$("session-msg").className = "err";
+		}
 	};
 
 	document.body.addEventListener("click", async (event) => {

@@ -297,7 +297,7 @@ curl -s -X POST https://whatsapp.site.com/api/sessions/INSTANCE/send \
 
 When a subscription is required and this email is not paid, send returns `402`. When the operator has disabled the client, send returns `403`.
 
-The same apps that talk to WaClient can keep `access_token` and `instance_id` in the body. Paths sit on the site root, not under `/api`:
+The same apps can keep `access_token` and `instance_id` in the body. Paths sit on the site root, not under `/api`. Each call to `create_instance` adds another phone. Phones already linked stay connected.
 
 ```bash
 curl -s -X POST https://whatsapp.site.com/send \
@@ -358,10 +358,13 @@ do not share a WhatsApp link.
 
 ## Console
 
-Opening the bridge in a browser is the client page, the same idea as WaClient.
-`https://whatsapp.site.com` shows the signup form. A visitor enters a client id
-and an email address. The page shows the token, and if SMTP is set the same
-details are emailed. Nothing about their Frappe site is asked at install time.
+Opening the bridge in a browser is the client page.
+`https://whatsapp.site.com` shows the signup form. A visitor enters an email
+address. The page creates the client id and the first instance, shows the
+token, and if mail is set the same details are emailed. Nothing about their
+Frappe site is asked at install time. After signing in they can add more
+numbers. Each number has its own instance id, and linking one does not log out
+the others.
 
 On Frappe Cloud, set **Bridge URL** to that hostname, choose Self-Hosted Bridge,
 and press **Sign up this site**. The token is saved on that site, the webhook
@@ -370,23 +373,20 @@ open a WhatsApp Session and press Connect.
 
 The operator email is set in the browser at `/admin`. Paste the bridge API token printed by the installer, then the email that should open the admin panel. A request without that token is refused. After it is saved, signing in with that email opens the admin panel. Every other address signs in as that client. `BRIDGE_ADMIN_EMAIL` in the environment still works if it is set before the first start.
 
-## In place of WaClient
+## Apps that already send with an instance id
 
-The bridge speaks the same calls Queen and AgentX already make to
-`https://api.waclient.com`: `access_token` and `instance_id` in the request,
-`create_instance`, `get_qrcode`, `send`, `set_webhook`, and the rest. AgentX
-does not have to be installed on the app that sends. Change that app's API
-base URL to this bridge (`https://whatsapp.site.com`) and use a token and
-instance from here.
+The bridge accepts `access_token` and `instance_id` in the request, including
+`create_instance`, `get_qrcode`, `send`, and `set_webhook`. The sending app
+does not have to be this project's Frappe app. Point its API address at this
+bridge (`https://whatsapp.site.com`) and use a token and instance from here.
 
-A WaClient login cannot be copied across. On this bridge, sign up (the page,
-or **Sign up this site**), create an instance, point its webhook at the same
-address the app already uses, and scan the QR. Put the new instance id and
-token in the app's existing fields. Inbound messages are posted in the same
-shape WaClient uses, so the app's webhook parser does not change.
+Old credentials from another host cannot be copied across. Sign up here, create
+an instance, point its webhook at the address the app already uses, and scan
+the QR. Put the new instance id and token in the app's existing fields.
 
-Events for an AgentX bridge session stay in the signed flat shape. A session
-registered with `set_webhook` uses the WaClient shape instead.
+Events for a session registered through the Frappe app stay in the signed flat
+shape. A session registered with `set_webhook` uses the nested message shape
+instead.
 
 On this server the page is `http://127.0.0.1:8787`. From anywhere else it is
 the public hostname, or:

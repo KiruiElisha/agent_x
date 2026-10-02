@@ -9,18 +9,18 @@ WhatsApp Web needs a socket that stays open for days. Frappe's workers are
 forked and short-lived, so that socket has to live *somewhere else*. Where you
 put it is the only real deployment decision, and AgentX supports both answers.
 
-| | **WaClient** | **Self-hosted bridge** |
+| | **Hosted provider** | **Self-hosted bridge** |
 | --- | --- | --- |
 | Works on Frappe Cloud | **Yes** | Yes, with the bridge on a server of yours |
 | Extra infrastructure | None | A small server; one command installs it |
-| Who holds the session | WaClient | You |
-| Who can read messages | WaClient | Only you |
+| Who holds the session | The provider | You |
+| Who can read messages | The provider | Only you |
 | Cost | Their subscription | A small VPS |
 | QR scanned in Desk | Yes | Yes |
 
 **On Frappe Cloud, the session cannot live on the bench itself**, because a
-managed bench has nowhere to run a persistent process. Either let WaClient host
-it, or run the bridge on a server you control. If that server already hosts
+managed bench has nowhere to run a persistent process. Either use a hosted
+provider, or run the bridge on a server you control. If that server already hosts
 Frappe with a domain, cloud sites reach it at `https://<that-site>/agentx-bridge`
 and do not need a second domain. A bridge on a machine with no Frappe site
 needs a domain of its own. See [bridge/README.md](bridge/README.md).
@@ -29,7 +29,7 @@ is identical either way, and switching later is a dropdown in AgentX Settings,
 not a rewrite.
 
 ```
-                  ┌── WaClient (hosted)  ──┐
+                  ┌── hosted provider  ──┐
 WhatsApp  <-->    │                        │  <-->  Frappe (agent_x)
                   └── bridge/ (your box) ──┘         policy, agent, audit
 ```
@@ -47,10 +47,10 @@ bench --site <your-site> migrate
 
 Open **AgentX Settings → Connection** and pick one.
 
-**WaClient** — paste your Access Token. Create an instance in the WaClient
-dashboard and note its Instance ID. A Webhook Token is generated when you
-save; press **Register Webhook** so WaClient sends it. Without a token every
-inbound event is refused.
+**Hosted provider** — paste your Access Token. Create an instance in that
+provider's dashboard and note its Instance ID. A Webhook Token is generated
+when you save; press **Register Webhook** so the provider sends it. Without a
+token every inbound event is refused.
 
 **Self-hosted bridge** — on the server that will run it:
 
@@ -80,7 +80,7 @@ Press **Test Connection** either way.
 
 ### 4. Pair a number
 
-Create a **WhatsApp Session**. On WaClient, paste the Instance ID — or press
+Create a **WhatsApp Session**. For the hosted provider, paste the Instance ID — or press
 **Create Instance** and AgentX mints one for you. Then press **Connect** and
 scan the QR that appears in the form.
 
@@ -152,7 +152,7 @@ waiting. That means a worker must be running: `bench worker` (supervisor runs
 it on a production bench; Frappe Cloud always has one). With no worker,
 messages are logged but never answered. Jobs for one contact run one at a time.
 
-**Webhook authentication fails closed.** WaClient needs the Webhook Token and
+**Webhook authentication fails closed.** The hosted provider needs the Webhook Token and
 the bridge needs the Webhook Secret. If either is missing, every event is
 refused and an Error Log entry says why, at most once an hour. **Verify
 Signature** can be switched off only in developer mode.
@@ -244,11 +244,9 @@ Pending actions can be approved from Desk, where the approver must hold the
 permission the action needs — so approval cannot launder a change past a
 permission check.
 
-## WaClient endpoints in use
+## Endpoints in use
 
-Built against [the WhatsApp Web API docs](https://waclient.com/docs/whatsapp-web-api).
-Everything is JSON on `https://api.waclient.com`, with `instance_id` and
-`access_token` added to every call.
+The hosted provider uses JSON, with `instance_id` and `access_token` on every call. The bridge accepts the same calls.
 
 | Purpose | Endpoint | Where it surfaces |
 | --- | --- | --- |
@@ -297,7 +295,7 @@ send_message(
 )
 ```
 
-WaClient can only send media from a public URL; the bridge also accepts raw
+The hosted provider can only send media from a public URL; the bridge also accepts raw
 bytes.
 
 ## Knowledge base
@@ -345,7 +343,7 @@ agent_x/
       base.py               The interface every provider implements
       waclient.py           Hosted gateway  (Frappe Cloud)
       bridge.py             Self-hosted Baileys bridge
-    payload.py              Parses WaClient's nested webhook shapes
+    payload.py              Parses the hosted provider's nested webhook shapes
     webhook.py              Inbound events, authenticated per provider
     messaging.py            Sending and logging
     phone.py                Number normalisation

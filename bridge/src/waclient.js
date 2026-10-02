@@ -9,7 +9,6 @@ import crypto from "node:crypto";
 import express from "express";
 
 import { requireSending } from "./billing.js";
-import { ensureInstance } from "./routes.js";
 import { getTenant, resolveAccess } from "./tenants.js";
 
 const STATES = {
@@ -69,10 +68,6 @@ export function buildWaClientRouter(manager) {
 		try {
 			const who = await caller(req, res);
 			if (!who) return;
-			if (who.access.role === "tenant") {
-				const sessions = await ensureInstance(manager, who.access.id);
-				return res.json(ok({ instance_id: sessions[0]?.session || "" }));
-			}
 			const id = crypto.randomBytes(7).toString("hex").toUpperCase();
 			await manager.open(id, who.access, { webhook_style: "waclient" });
 			return res.json(ok({ instance_id: id }));

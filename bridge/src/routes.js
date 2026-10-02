@@ -357,6 +357,18 @@ export function buildRouter(manager) {
 	);
 
 	router.post(
+		"/sessions",
+		wrap(async (req, res) => {
+			if (req.access?.role !== "tenant") {
+				return res.status(403).json({ ok: false, error: "Sign in as a client to add a number" });
+			}
+			const id = newInstanceId();
+			await manager.open(id, req.access, { webhook_style: "waclient" });
+			return res.json({ ok: true, instance_id: id });
+		}),
+	);
+
+	router.post(
 		"/sessions/:id/start",
 		wrap(async (req, res) => {
 			const session = await manager.start(req.params.id, req.access, req.body || {});

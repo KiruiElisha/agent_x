@@ -30,6 +30,11 @@ frappe.ui.form.on("AgentX Settings", {
 				() => issue_tenant(frm),
 				__("Bridge"),
 			);
+			frm.add_custom_button(
+				__("Sync clients"),
+				() => sync_clients(frm),
+				__("Bridge"),
+			);
 		}
 
 		if (frm.doc.webhook_url) {
@@ -177,6 +182,21 @@ function test_connection(frm) {
 		}
 
 		wrapper.empty().append(bits.join(""));
+	});
+}
+
+function sync_clients(frm) {
+	frappe.call({
+		method: "agent_x.billing.pull_clients",
+		freeze: true,
+		freeze_message: __("Reading clients from the bridge…"),
+		callback(result) {
+			const count = (result.message || {}).synced || 0;
+			frappe.show_alert({
+				message: __("{0} clients are on Bridge Subscription.", [count]),
+				indicator: "green",
+			});
+		},
 	});
 }
 

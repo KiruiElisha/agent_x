@@ -2,6 +2,16 @@
 
 import path from "node:path";
 
+function domainOf(url) {
+	try {
+		const host = new URL(url).hostname;
+		if (!host || host === "localhost" || host === "127.0.0.1") return "";
+		return host;
+	} catch {
+		return "";
+	}
+}
+
 function required(name) {
 	const value = process.env[name];
 	if (!value) {
@@ -53,6 +63,12 @@ export const config = {
 	smtpUser: process.env.BRIDGE_SMTP_USER || "",
 	smtpPassword: process.env.BRIDGE_SMTP_PASSWORD || "",
 	smtpFrom: process.env.BRIDGE_SMTP_FROM || process.env.BRIDGE_SMTP_USER || "",
+
+	// The bridge's own mail listener. Loopback by default so it is not an open
+	// relay. Set BRIDGE_MAIL_HOST to receive mail for BRIDGE_MAIL_DOMAIN.
+	mailHost: process.env.BRIDGE_MAIL_HOST || "127.0.0.1",
+	mailPort: Number(process.env.BRIDGE_MAIL_PORT || 2525),
+	mailDomain: (process.env.BRIDGE_MAIL_DOMAIN || domainOf(process.env.BRIDGE_PUBLIC_URL || "")).toLowerCase(),
 
 	// Baileys can only decrypt media while it still holds the message object,
 	// so small audio is downloaded at arrival and inlined in the webhook.

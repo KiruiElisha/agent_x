@@ -8,7 +8,9 @@ import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { getAdminEmail, setAdminEmail } from "./adminStore.js";
 import { mailConfigured, publicOrigin, sendWelcome } from "./mail.js";
-import { createTenant, deleteTenant, findTenantByEmail, listTenants } from "./tenants.js";
+import { listMail } from "./mailserver.js";
+import { charge, grant, isActive, loadBilling, notifySite, publicOffer, requirePaid, saveConfig } from "./billing.js";
+import { createTenant, deleteTenant, findTenantByEmail, getTenant, listTenants } from "./tenants.js";
 
 /** Turns a rejected promise into a JSON error instead of an unhandled rejection. */
 function wrap(handler) {
@@ -156,6 +158,7 @@ export function buildRouter(manager) {
 					logger.warn({ err: error.message, client: created.id }, "could not email the client token");
 				}
 			}
+			await notifySite(created);
 			return res.json({
 				ok: true,
 				emailed,
@@ -166,7 +169,68 @@ export function buildRouter(manager) {
 		}),
 	);
 
+	router.get(
+		"/billing/offer",
+		wrap(async (_req, res) => res.json({ ok: true, ...(publicOffer(await loadBilling())) })),
+	);
+
 	router.use(requireToken);
+
+	router.post(
+		"/billing/config",
+		requireAdmin,
+		wrap(async (req, res) => res.json({ ok: true, ...(await saveConfig(req.body || {})) })),
+	);
+
+	router.post(
+		"/billing/grant",
+		requireAdmin,
+		wrap(async (req, res) => {
+			const body = req.body || {};
+			const saved = await grant(body.email, body.paid_until, body);
+			return res.json({ ok: true, emailed: Boolean(saved?.emailed) });
+		}),
+	);
+
+	router.get(
+		"/billing/status",
+		wrap(async (req, res) => {
+			const billing = await loadBilling();
+			const tenant = req.access?.role === "tenant" ? await getTenant(req.access.id) : null;
+			return res.json({
+				ok: true,
+				enabled: Boolean(billing.enabled),
+				required: Boolean(billing.required),
+				amount: billing.amount,
+				currency: billing.currency,
+				method: billing.method,
+				active: isActive(billing, tenant?.email),
+			});
+		}),
+	);
+
+	router.post(
+		"/billing/pay",
+		wrap(async (req, res) => {
+			if (req.access?.role !== "tenant") {
+				return res.status(403).json({ ok: false, error: "Sign in as a client to pay" });
+			}
+			const tenant = await getTenant(req.access.id);
+			if (!tenant?.email) return res.status(404).json({ ok: false, error: "This client has no email" });
+			const billing = await loadBilling();
+			if (!billing.enabled || !billing.secret_key) {
+				return res.status(400).json({ ok: false, error: "Subscriptions are not configured" });
+			}
+			const result = await charge(billing, tenant.email, (req.body || {}).phone);
+			return res.json({ ok: true, ...result });
+		}),
+	);
+
+	router.get(
+		"/mail",
+		requireAdmin,
+		wrap(async (_req, res) => res.json({ ok: true, messages: await listMail() })),
+	);
 
 	router.post(
 		"/admin",
@@ -182,6 +246,7 @@ export function buildRouter(manager) {
 		requireAdmin,
 		wrap(async (req, res) => {
 			const created = await createTenant((req.body || {}).id);
+			await notifySite(created);
 			// The token is returned once. It is not listed afterwards.
 			return res.json({ ok: true, ...created });
 		}),
@@ -300,6 +365,10 @@ export function buildRouter(manager) {
 		wrap(async (req, res) => {
 			const session = manager.owned(req.params.id, req.access);
 			if (!session) return missing(res, req.params.id);
+			if (req.access?.role === "tenant") {
+				const tenant = await getTenant(req.access.id);
+				await requirePaid(tenant?.email);
+			}
 
 			const { to, text, media } = req.body || {};
 			if (!to) return res.status(400).json({ ok: false, error: "to is required" });

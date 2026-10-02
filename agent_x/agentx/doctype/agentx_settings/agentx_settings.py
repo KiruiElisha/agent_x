@@ -39,6 +39,8 @@ class AgentXSettings(Document):
 		self.bridge_url = (self.bridge_url or "").strip().rstrip("/")
 		self.public_base_url = (self.public_base_url or "").strip().rstrip("/")
 		self.webhook_url = self.build_webhook_url()
+		base = (self.public_base_url or "").rstrip("/") or get_url()
+		self.intasend_webhook_url = f"{base}/api/method/agent_x.billing.intasend"
 
 		self.validate_instance()
 		self.ensure_webhook_token()
@@ -78,6 +80,20 @@ class AgentXSettings(Document):
 
 	def on_update(self) -> None:
 		self.sync_session()
+		self.sync_billing()
+		self.sync_clients()
+
+	def sync_clients(self) -> None:
+		from agent_x.billing import pull_clients, remember_site
+
+		remember_site(self)
+		pull_clients(self)
+
+	def sync_billing(self) -> None:
+		from agent_x.billing import push_to_bridge
+
+		if self.subscriptions_enabled or self.intasend_secret_key:
+			push_to_bridge(self)
 
 	def validate_policies(self) -> None:
 		seen: set[str] = set()

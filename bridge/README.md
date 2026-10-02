@@ -227,6 +227,36 @@ for this server, or a tenant token for another site.
 | POST | `/api/tenants` | Master token only. `{id}` returns a token for one client, once |
 | GET | `/api/tenants` | Master token only. Ids, not the tokens |
 | DELETE | `/api/tenants/:id` | Master token only. Forget that token |
+| GET | `/api/billing/status` | Whether this client has an active subscription |
+| POST | `/api/billing/pay` | Client token. `{phone}` starts an M-Pesa prompt, or returns a card `setup_url` |
+| POST | `/api/billing/config` | Master token. The ERPNext site writes the plan here |
+| POST | `/api/billing/grant` | Master token. Marks an email paid until a date |
+
+## Subscriptions
+
+Payments are configured on the operator’s ERPNext site, in AgentX Settings → Subscriptions.
+Save the IntaSend secret key there (sandbox or live) and paste **IntaSend webhook URL**
+into the IntaSend dashboard webhook, with the same challenge string. Turning subscriptions
+on copies the plan to this bridge. A client then pays from this page, or you collect from
+the Bridge Subscription form.
+
+M-Pesa is one prompt per period (`api_ref` is `sub:` plus the client email). Cards use
+IntaSend’s [subscriptions API](https://developers.intasend.com/guides/subscriptions).
+A completed payment is confirmed by the webhook
+([challenge check](https://developers.intasend.com/guides/webhooks)). When **Require an Active Subscription**
+is on, sending fails until that email is paid for the current period.
+A completed payment emails a receipt. New signups are copied to **Bridge Subscription**
+on the operator site (and again when you save AgentX Settings, or press **Sync clients**).
+
+## Mail
+
+The bridge listens for SMTP on `127.0.0.1:2525`. It accepts mail for its own domain
+and sends receipts either through `BRIDGE_SMTP_HOST` or, when that is empty, directly
+to the recipient's mail server. Set `BRIDGE_MAIL_DOMAIN` if it should not be taken
+from `BRIDGE_PUBLIC_URL`. To receive mail from the internet, set `BRIDGE_MAIL_HOST=0.0.0.0`,
+open the port, and point an MX record at this machine. Mail for any other domain is refused.
+
+
 
 The master token (`BRIDGE_API_TOKEN`) can use every session. A tenant token can
 only use the sessions it has started. Two clients who both name a session `main`

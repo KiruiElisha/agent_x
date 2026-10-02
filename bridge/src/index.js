@@ -8,6 +8,7 @@ import express from "express";
 import { loadStoredAdmin } from "./adminStore.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
+import { startMailServer } from "./mailserver.js";
 import { buildRouter, errorHandler } from "./routes.js";
 import { SessionManager } from "./session.js";
 import { buildWaClientRouter } from "./waclient.js";
@@ -42,6 +43,8 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 const server = app.listen(config.port, config.host, async () => {
 	await loadStoredAdmin();
 	logger.info({ host: config.host, port: config.port }, "bridge listening");
+	const mailServer = startMailServer();
+	server.mailServer = mailServer;
 	// In a container 0.0.0.0 is required, and the port mapping decides exposure.
 	if (!LOOPBACK.has(config.host) && !process.env.BRIDGE_IN_CONTAINER) {
 		// Anyone who can reach this port and guess the token can send from the
@@ -58,6 +61,7 @@ async function shutdown(signal, code = 0) {
 	logger.info({ signal }, "shutting down");
 	setTimeout(() => process.exit(code), SHUTDOWN_GRACE_MS).unref();
 	server.close();
+	server.mailServer?.close();
 	try {
 		await manager.shutdown();
 	} catch (error) {

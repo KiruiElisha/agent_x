@@ -49,6 +49,17 @@
 		.gets div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 		.gets span { display: block; font-size: 12px; color: var(--muted); }
 		.gets strong { font-size: 14px; }
+		.plan {
+			margin-top: 18px;
+			background: #1c1917;
+			color: #fafaf9;
+			border-radius: 14px;
+			padding: 16px 18px;
+		}
+		.plan span { display: block; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #d6d3d1; }
+		.plan strong { display: block; font-size: 32px; letter-spacing: -0.04em; margin-top: 2px; }
+		.plan p { color: #d6d3d1; font-size: 14px; margin-top: 4px; }
+		.mail-read { margin-top: 12px; white-space: pre-wrap; background: var(--paper); border-radius: 10px; padding: 12px; min-height: 72px; }
 		.actions { display: flex; flex-direction: column; gap: 12px; }
 		.card h2 { font-size: 18px; }
 		.card .lead { color: var(--muted); margin-top: 6px; font-size: 14px; }
@@ -147,6 +158,11 @@
 			<div class="brand">WhatsApp API</div>
 			<h1>Send and receive WhatsApp from your own app.</h1>
 			<p>This service keeps the phone session. Your app sends and receives over HTTP. You do not install anything beside the app. Anything that already uses an instance id and an access token, including a WaClient app, only needs this site as its API address.</p>
+			<div id="plan" class="plan hidden">
+				<span id="plan-kicker">Subscription</span>
+				<strong id="plan-price"></strong>
+				<p id="plan-detail"></p>
+			</div>
 			<ol class="flow">
 				<li>
 					<b>1</b>
@@ -167,6 +183,13 @@
 					<div>
 						<strong>Paste two values into your app</strong>
 						<p>Set the API address to this site. Messages you should receive go to the webhook you register.</p>
+					</div>
+				</li>
+				<li id="pay-step" class="hidden">
+					<b>4</b>
+					<div>
+						<strong>Pay from this page</strong>
+						<p id="pay-step-copy">After you sign in, a subscription keeps this number able to send. The receipt is emailed to you.</p>
 					</div>
 				</li>
 			</ol>
@@ -225,6 +248,7 @@
 		<button type="button" data-panel="overview" class="active">Overview</button>
 		<button type="button" data-panel="clients">Clients</button>
 		<button type="button" data-panel="numbers">Numbers</button>
+		<button type="button" data-panel="mail">Mail</button>
 	</aside>
 	<div class="workspace">
 		<div class="top">
@@ -318,6 +342,17 @@
 					</div>
 				</div>
 			</div>
+			<div id="sub-card" class="card hidden" style="margin-bottom:16px">
+				<h2>Subscription</h2>
+				<p id="sub-lead" style="color:var(--muted);font-size:13px;margin-top:6px"></p>
+				<p id="sub-receipt" style="color:var(--muted);font-size:13px">When a payment completes, the receipt is emailed to the address you signed in with.</p>
+				<label for="pay-phone">M-Pesa phone</label>
+				<input id="pay-phone" placeholder="254712345678" />
+				<div class="row" style="margin-top:12px">
+					<button id="pay" class="btn" type="button">Pay</button>
+				</div>
+				<p id="pay-note" style="color:var(--muted);font-size:13px;margin-top:8px"></p>
+			</div>
 			<div class="card status-banner">
 				<div>
 					<div id="numbers-title" style="font-size:13px;color:var(--muted)">WhatsApp</div>
@@ -365,6 +400,21 @@
 				</table>
 			</div>
 		</section>
+
+		<section data-panel-view="mail" class="hidden">
+			<div class="card">
+				<div class="row" style="justify-content:space-between">
+					<h2>Mail</h2>
+					<button id="mail-refresh" class="btn ghost" type="button">Refresh</button>
+				</div>
+				<p class="lead">Receipts and other messages this bridge has sent or received.</p>
+				<table>
+					<thead><tr><th>When</th><th></th><th>With</th><th>Subject</th><th></th></tr></thead>
+					<tbody id="mail-rows"></tbody>
+				</table>
+				<pre id="mail-read" class="mail-read"></pre>
+			</div>
+		</section>
 	</div>
 </div>
 
@@ -407,6 +457,7 @@
 		document.querySelectorAll("[data-panel]").forEach((el) => {
 			el.classList.toggle("active", el.dataset.panel === name);
 		});
+		if (name === "mail") loadMail().catch((error) => { $("mail-read").textContent = error.message; });
 	}
 
 	async function signIn(token) {
@@ -441,7 +492,44 @@
 		await loadSessions();
 		bindLinker();
 		if (role !== "admin") renderCreds(activeToken, sessions);
+		if (role !== "admin") await loadSubscription();
 	}
+
+	async function loadSubscription() {
+		const status = await call("GET", "/api/billing/status");
+		const card = $("sub-card");
+		if (!status.enabled) {
+			card.classList.add("hidden");
+			return;
+		}
+		card.classList.remove("hidden");
+		const price = status.amount + " " + (status.currency || "");
+		$("sub-lead").textContent = status.active
+			? "This client is paid through the current period (" + price + ")."
+			: "Pay " + price + " to keep this number able to send.";
+		show("pay-phone", status.method !== "Card subscription");
+		const label = card.querySelector("label");
+		if (label) label.classList.toggle("hidden", status.method === "Card subscription");
+		$("pay").textContent = status.method === "Card subscription" ? "Start card subscription" : "Request M-Pesa prompt";
+		$("pay-note").textContent = "";
+	}
+
+	$("pay").onclick = async () => {
+		$("pay-note").textContent = "Waiting…";
+		try {
+			const result = await call("POST", "/api/billing/pay", { phone: $("pay-phone").value.trim() });
+			if (result.setup_url) {
+				$("pay-note").textContent = "";
+				window.location.href = result.setup_url;
+				return;
+			}
+			$("pay-note").textContent = result.invoice_id
+				? "Prompt sent. Check the phone for " + result.invoice_id + "."
+				: "Payment requested.";
+		} catch (error) {
+			$("pay-note").textContent = error.message;
+		}
+	};
 
 	function paintTenantTable(rows, target, withActions) {
 		const list = rows || [];
@@ -862,10 +950,52 @@
 		}
 	};
 
+	let mailRows = [];
+
+	async function loadMail() {
+		const data = await call("GET", "/api/mail");
+		mailRows = data.messages || [];
+		$("mail-rows").innerHTML = mailRows.map((row, index) => `
+			<tr data-mail="${index}">
+				<td>${escapeHtml((row.at || "").replace("T", " ").slice(0, 16))}</td>
+				<td>${escapeHtml(row.direction || "")}</td>
+				<td>${escapeHtml(row.direction === "in" ? row.from : row.to)}</td>
+				<td>${escapeHtml(row.subject || "")}</td>
+				<td>${escapeHtml(row.status || "")}</td>
+			</tr>`).join("") || `<tr><td colspan="5">No messages yet.</td></tr>`;
+	}
+
+	$("mail-rows").onclick = (event) => {
+		const row = event.target.closest("tr[data-mail]");
+		if (!row) return;
+		const message = mailRows[Number(row.dataset.mail)] || {};
+		$("mail-read").textContent = message.text || message.error || "";
+	};
+	$("mail-refresh").onclick = () => loadMail().catch((error) => { $("mail-read").textContent = error.message; });
+
+	function periodLabel(days, method) {
+		const span = days === 1 ? "day" : days === 7 ? "week" : days === 30 ? "month" : days === 365 ? "year" : (days + " days");
+		const how = method === "Card subscription" ? "card, billed every " : "M-Pesa prompt each ";
+		return how + span;
+	}
+
+	async function loadOffer() {
+		const response = await fetch(api("/api/billing/offer"), { headers: { Accept: "application/json" } });
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok || !data.enabled) return;
+		$("plan").classList.remove("hidden");
+		$("plan-price").textContent = data.amount + " " + (data.currency || "");
+		$("plan-detail").textContent = (data.plan_name || "WhatsApp API") + " · " + periodLabel(data.period_days, data.method) + ". You pay after signing in, and the receipt is emailed to you.";
+		show("pay-step", true);
+		const lead = document.querySelector("#signup-card .lead");
+		if (lead) lead.textContent = "Create the client first. Payment is on the next screen, and the receipt goes to this email.";
+	}
+
 	if (onAdminPath) {
 		prepareAdminPage().catch(() => {});
-	} else if (activeEmail) {
-		loginByEmail(activeEmail).catch(() => show("login", true));
+	} else {
+		loadOffer().catch(() => {});
+		if (activeEmail) loginByEmail(activeEmail).catch(() => show("login", true));
 	}
 </script>
 </body>

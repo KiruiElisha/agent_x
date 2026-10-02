@@ -157,6 +157,24 @@
   "use_corrections",
   "column_break_corrections",
   "correction_limit",
+  "subscriptions_tab",
+  "subscriptions_enabled",
+  "subscriptions_required",
+  "intasend_section",
+  "intasend_sandbox",
+  "intasend_secret_key",
+  "intasend_webhook_challenge",
+  "column_break_intasend",
+  "intasend_currency",
+  "subscription_amount",
+  "subscription_method",
+  "plan_section",
+  "subscription_plan_name",
+  "subscription_frequency",
+  "column_break_plan",
+  "subscription_frequency_unit",
+  "subscription_billing_cycles",
+  "intasend_webhook_url",
   "logging_tab",
   "log_messages",
   "store_raw_payload",
@@ -1106,6 +1124,130 @@
    "fieldname": "fallback_reply",
    "fieldtype": "Small Text",
    "label": "Fallback Reply"
+  },
+  {
+   "fieldname": "subscriptions_tab",
+   "fieldtype": "Tab Break",
+   "label": "Subscriptions"
+  },
+  {
+   "default": "0",
+   "description": "Clients can pay for access from the public page. Plans and keys are set here.",
+   "fieldname": "subscriptions_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Subscriptions"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "description": "The bridge refuses a client whose subscription is not active.",
+   "fieldname": "subscriptions_required",
+   "fieldtype": "Check",
+   "label": "Require an Active Subscription"
+  },
+  {
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "fieldname": "intasend_section",
+   "fieldtype": "Section Break",
+   "label": "IntaSend"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "description": "Sandbox uses sandbox.intasend.com. Turn off for live keys.",
+   "fieldname": "intasend_sandbox",
+   "fieldtype": "Check",
+   "label": "Use Sandbox"
+  },
+  {
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "description": "Secret key from the IntaSend dashboard. Sent as Authorization: Bearer.",
+   "fieldname": "intasend_secret_key",
+   "fieldtype": "Password",
+   "label": "Secret Key"
+  },
+  {
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "description": "The challenge you set on the IntaSend webhook. Incoming events must carry the same value.",
+   "fieldname": "intasend_webhook_challenge",
+   "fieldtype": "Password",
+   "label": "Webhook Challenge"
+  },
+  {
+   "fieldname": "column_break_intasend",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "KES",
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "fieldname": "intasend_currency",
+   "fieldtype": "Data",
+   "label": "Currency"
+  },
+  {
+   "default": "1000",
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "fieldname": "subscription_amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "options": "intasend_currency"
+  },
+  {
+   "default": "M-Pesa prompt",
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "description": "M-Pesa sends a PIN prompt. Card subscription sends the client to IntaSend to save a card.",
+   "fieldname": "subscription_method",
+   "fieldtype": "Select",
+   "label": "How clients pay",
+   "options": "M-Pesa prompt\nCard subscription"
+  },
+  {
+   "depends_on": "eval:doc.subscriptions_enabled && doc.subscription_method==\"Card subscription\"",
+   "fieldname": "plan_section",
+   "fieldtype": "Section Break",
+   "label": "Card plan"
+  },
+  {
+   "default": "WhatsApp API",
+   "depends_on": "eval:doc.subscriptions_enabled && doc.subscription_method==\"Card subscription\"",
+   "fieldname": "subscription_plan_name",
+   "fieldtype": "Data",
+   "label": "Plan Name"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.subscriptions_enabled && doc.subscription_method==\"Card subscription\"",
+   "fieldname": "subscription_frequency",
+   "fieldtype": "Int",
+   "label": "Bill Every"
+  },
+  {
+   "fieldname": "column_break_plan",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "M",
+   "depends_on": "eval:doc.subscriptions_enabled && doc.subscription_method==\"Card subscription\"",
+   "fieldname": "subscription_frequency_unit",
+   "fieldtype": "Select",
+   "label": "Period",
+   "options": "D\nW\nM\nY"
+  },
+  {
+   "default": "12",
+   "depends_on": "eval:doc.subscriptions_enabled && doc.subscription_method==\"Card subscription\"",
+   "description": "How many times IntaSend bills the card. 0 means until cancelled.",
+   "fieldname": "subscription_billing_cycles",
+   "fieldtype": "Int",
+   "label": "Billing Cycles"
+  },
+  {
+   "depends_on": "eval:doc.subscriptions_enabled",
+   "description": "Set this as the IntaSend webhook URL. Docs: https://developers.intasend.com/guides/webhooks",
+   "fieldname": "intasend_webhook_url",
+   "fieldtype": "Data",
+   "label": "IntaSend Webhook URL",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

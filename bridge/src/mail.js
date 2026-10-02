@@ -4,9 +4,10 @@ import net from "node:net";
 import tls from "node:tls";
 
 import { config } from "./config.js";
+import { sendOut, storeMail } from "./mailserver.js";
 
 export function mailConfigured() {
-	return Boolean(config.smtpHost && config.smtpFrom);
+	return Boolean((config.smtpHost && config.smtpFrom) || config.mailDomain);
 }
 
 /** Address shown to the client. Prefer BRIDGE_PUBLIC_URL. */
@@ -37,8 +38,52 @@ export async function sendWelcome({ to, id, token, origin, instanceId }) {
 	await deliver({ to, subject: "Your WhatsApp bridge client", text });
 }
 
+export async function sendReceipt({ to, amount, currency, paidUntil, invoiceId, plan }) {
+	const when = paidUntil ? String(paidUntil).replace("T", " ").slice(0, 16) : "";
+	const text = [
+		"This is your receipt for WhatsApp API.",
+		"",
+		`Plan: ${plan || "WhatsApp API"}`,
+		`Amount: ${amount ?? ""} ${currency || ""}`.trim(),
+		invoiceId ? `Invoice: ${invoiceId}` : null,
+		when ? `Paid until: ${when}` : null,
+		"",
+		"The subscription covers sending from the number linked to this email.",
+	].filter((line) => line !== null).join("\n");
+	await deliver({ to, subject: "Your WhatsApp API receipt", text });
+}
+
 async function deliver({ to, subject, text }) {
-	const from = addressOf(config.smtpFrom);
+	const from = config.smtpFrom || (config.mailDomain ? `WhatsApp API <receipts@${config.mailDomain}>` : "");
+	if (config.smtpHost && config.smtpFrom) {
+		try {
+			await deliverViaRelay({ to, subject, text, from: config.smtpFrom });
+			await storeMail({
+				direction: "out",
+				from: config.smtpFrom,
+				to,
+				subject,
+				text,
+				status: "sent",
+			});
+			return;
+		} catch (error) {
+			await storeMail({
+				direction: "out",
+				from: config.smtpFrom,
+				to,
+				subject,
+				text,
+				status: "failed",
+				error: error.message,
+			});
+			throw error;
+		}
+	}
+	await sendOut({ to, subject, text, from });
+}
+
+async function deliverViaRelay({ to, subject, text, from }) {
 	const body = dotStuff(
 		[
 			`From: ${config.smtpFrom}`,
@@ -65,7 +110,7 @@ async function deliver({ to, subject, text }) {
 		await command(socket, b64(config.smtpUser));
 		await command(socket, b64(config.smtpPassword || ""));
 	}
-	await command(socket, `MAIL FROM:<${from}>`);
+	await command(socket, `MAIL FROM:<${addressOf(from)}>`);
 	await command(socket, `RCPT TO:<${to}>`);
 	await command(socket, "DATA", 354);
 	await command(socket, body + "\r\n.");

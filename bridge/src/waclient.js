@@ -8,7 +8,8 @@ still work. AgentX does not have to be installed on their site.
 import crypto from "node:crypto";
 import express from "express";
 
-import { resolveAccess } from "./tenants.js";
+import { requirePaid } from "./billing.js";
+import { getTenant, resolveAccess } from "./tenants.js";
 
 const STATES = {
 	connected: "connected",
@@ -166,6 +167,10 @@ export function buildWaClientRouter(manager) {
 		const session = manager.owned(id, who.access);
 		if (!session || session.state !== "connected") {
 			return fail(res, 400, "instance is not connected");
+		}
+		if (who.access?.role === "tenant") {
+			const tenant = await getTenant(who.tenantId);
+			await requirePaid(tenant?.email);
 		}
 		const to = who.body.chat_id || who.body.number;
 		const sent = await sendLikeWaClient(session, to, who.body);

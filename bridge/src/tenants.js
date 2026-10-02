@@ -89,6 +89,13 @@ export async function findTenantByEmail(email) {
 	return null;
 }
 
+export async function getTenant(id) {
+	const tenants = await read();
+	const row = tenants[id];
+	if (!row) return null;
+	return { id, email: row.email || "", token: row.token };
+}
+
 export async function listTenants() {
 	const tenants = await read();
 	return Object.entries(tenants).map(([id, row]) => ({

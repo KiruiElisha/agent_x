@@ -19,6 +19,14 @@ frappe.ui.form.on("AgentX Settings", {
 			frm.add_custom_button(__("Register Webhook"), () => register_webhook(frm));
 		}
 
+		if (frm.doc.whatsapp_provider === "Self-Hosted Bridge" || frm.doc.bridge_url) {
+			frm.add_custom_button(
+				__("Sync clients"),
+				() => sync_clients(frm),
+				__("Bridge"),
+			);
+		}
+
 		if (frm.doc.whatsapp_provider === "Self-Hosted Bridge") {
 			frm.add_custom_button(
 				__("Sign up this site"),
@@ -28,11 +36,6 @@ frappe.ui.form.on("AgentX Settings", {
 			frm.add_custom_button(
 				__("Issue Tenant Token"),
 				() => issue_tenant(frm),
-				__("Bridge"),
-			);
-			frm.add_custom_button(
-				__("Sync clients"),
-				() => sync_clients(frm),
 				__("Bridge"),
 			);
 		}
@@ -193,7 +196,7 @@ function sync_clients(frm) {
 		callback(result) {
 			const count = (result.message || {}).synced || 0;
 			frappe.show_alert({
-				message: __("{0} clients are on Bridge Subscription.", [count]),
+				message: __("{0} clients were copied onto Bridge Subscription, including trial and paid status.", [count]),
 				indicator: "green",
 			});
 		},

@@ -223,9 +223,7 @@
 		<div class="actions">
 			<div class="card" id="signup-card">
 				<h2>Create a client</h2>
-				<p class="lead">The token is shown after this and sent to the email.</p>
-				<label for="signup-id">Client id, optional</label>
-				<input id="signup-id" placeholder="Leave blank and we create it" autocomplete="off" />
+				<p class="lead">The token is shown after this and sent to the email. The client id is created for you.</p>
 				<label for="signup-email">Email</label>
 				<input id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" />
 				<div class="row" style="margin-top:14px">
@@ -920,9 +918,8 @@
 				method: "POST",
 				headers: { Accept: "application/json", "Content-Type": "application/json" },
 				body: JSON.stringify({
-					id: $("signup-id").value.trim().toLowerCase(),
-					email: $("signup-email").value.trim(),
-				}),
+				email: $("signup-email").value.trim(),
+			}),
 			});
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok || data.ok === false) throw new Error(data.error || data.message || ("HTTP " + response.status));

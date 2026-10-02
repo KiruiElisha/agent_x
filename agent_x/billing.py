@@ -134,17 +134,30 @@ def remember_site(settings) -> None:
 		frappe.log_error(frappe.get_traceback(), "AgentX: could not register this site with the bridge")
 
 
-def record_client(email: str, client_id: str = "") -> None:
+def record_client(email: str, client_id: str = "", payment: str = "", paid_until=None, trial_until=None) -> None:
+	"""Create or refresh the subscription row for one bridge client."""
 	email = (email or "").strip().lower()
 	if not email:
 		return
+	if payment == "Active":
+		status, until = "Active", paid_until
+	elif payment == "Trial":
+		status, until = "Trial", trial_until
+	else:
+		status, until = "Signed up", None
+	values = {"client_id": client_id or None, "status": status}
+	if until:
+		values["paid_until"] = until
 	if frappe.db.exists("Bridge Subscription", email):
 		doc = frappe.get_doc("Bridge Subscription", email)
-		if client_id and doc.client_id != client_id:
+		if client_id:
 			doc.client_id = client_id
-			doc.save(ignore_permissions=True)
+		doc.status = status
+		if until:
+			doc.paid_until = until
+		doc.save(ignore_permissions=True)
 		return
-	upsert(email, status="Signed up", client_id=client_id or None)
+	upsert(email, **values)
 
 
 @frappe.whitelist()
@@ -180,11 +193,28 @@ def pull_clients(settings=None) -> dict:
 			)
 		return {"synced": 0}
 	rows = (response.json() or {}).get("tenants") or []
+	if not rows:
+		try:
+			richer = requests.get(
+				f"{url}/api/billing/clients",
+				headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+				timeout=settings.request_timeout or 30,
+			)
+			if richer.status_code < 400:
+				rows = (richer.json() or {}).get("clients") or rows
+		except requests.RequestException:
+			pass
 	count = 0
 	for row in rows:
 		if not isinstance(row, dict) or not row.get("email"):
 			continue
-		record_client(row.get("email"), row.get("id") or "")
+		record_client(
+			row.get("email"),
+			row.get("id") or "",
+			payment=row.get("payment") or "",
+			paid_until=row.get("paid_until"),
+			trial_until=row.get("trial_until"),
+		)
 		count += 1
 	frappe.db.commit()
 	return {"synced": count}
@@ -201,7 +231,13 @@ def sync_client() -> dict:
 		return {"status": "unauthorised"}
 	raw = frappe.request.get_json(silent=True) if frappe.request else None
 	body = raw if isinstance(raw, dict) else {}
-	record_client(body.get("email"), body.get("client_id") or "")
+	record_client(
+		body.get("email"),
+		body.get("client_id") or "",
+		payment=body.get("payment") or "Trial",
+		trial_until=body.get("trial_until"),
+		paid_until=body.get("paid_until"),
+	)
 	frappe.db.commit()
 	return {"status": "ok"}
 

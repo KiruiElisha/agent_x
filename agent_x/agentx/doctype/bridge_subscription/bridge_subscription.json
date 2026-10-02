@@ -47,7 +47,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Signed up\nPending\nActive\nPast Due\nCancelled"
+   "options": "Signed up\nTrial\nPending\nActive\nPast Due\nCancelled"
   },
   {
    "fieldname": "column_break",

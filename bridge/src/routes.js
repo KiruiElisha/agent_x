@@ -180,7 +180,7 @@ export function buildRouter(manager) {
 					logger.warn({ err: error.message, client: created.id }, "could not email the client token");
 				}
 			}
-			await notifySite(created);
+			await notifySite({ ...created, payment: "Trial", trial_until: trialUntil });
 			return res.json({
 				ok: true,
 				emailed,

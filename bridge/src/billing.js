@@ -101,7 +101,13 @@ export async function notifySite(client) {
 				Accept: "application/json",
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({ email, client_id: client.id || "" }),
+			body: JSON.stringify({
+				email,
+				client_id: client.id || "",
+				payment: client.payment || "",
+				paid_until: client.paid_until || null,
+				trial_until: client.trial_until || null,
+			}),
 		});
 	} catch (error) {
 		const { logger } = await import("./logger.js");

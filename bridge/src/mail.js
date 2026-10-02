@@ -20,8 +20,9 @@ export function publicOrigin(req) {
 	return host ? `${proto}://${host}` : "";
 }
 
-export async function sendWelcome({ to, id, token, origin, instanceId }) {
+export async function sendWelcome({ to, id, token, origin, instanceId, trialUntil }) {
 	const url = origin || config.publicUrl || "";
+	const until = trialUntil ? String(trialUntil).replace("T", " ").slice(0, 16) : "";
 	const text = [
 		"Your WhatsApp bridge client is ready.",
 		"",
@@ -29,6 +30,7 @@ export async function sendWelcome({ to, id, token, origin, instanceId }) {
 		instanceId ? `Instance ID: ${instanceId}` : "",
 		`Bridge URL: ${url}`,
 		`Access token: ${token}`,
+		until ? `Trial: sending is included until ${until}.` : "",
 		"",
 		"In ERPNext or another app, set the API address to the bridge URL,",
 		"and paste the instance id and access token into the existing fields.",

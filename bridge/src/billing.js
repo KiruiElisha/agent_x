@@ -109,10 +109,32 @@ export async function notifySite(client) {
 	}
 }
 
+const TRIAL_DAYS = 5;
+
+function untilStamp(days) {
+	const span = Math.max(Number(days) || 1, 1);
+	return new Date(Date.now() + span * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function future(value) {
+	if (!value) return false;
+	const time = new Date(value).getTime();
+	return !Number.isNaN(time) && time > Date.now();
+}
+
 export function isActive(billing, email) {
-	const until = billing.paid?.[String(email || "").toLowerCase()];
-	if (!until) return false;
-	return new Date(until).getTime() > Date.now();
+	const key = String(email || "").toLowerCase();
+	return future(billing.paid?.[key]) || future(billing.trials?.[key]);
+}
+
+export async function startTrial(email) {
+	const key = String(email || "").toLowerCase();
+	if (!key) return null;
+	const billing = await loadBilling();
+	billing.trials = billing.trials || {};
+	billing.trials[key] = untilStamp(TRIAL_DAYS);
+	await save(billing);
+	return billing.trials[key];
 }
 
 export async function charge(billing, email, phone) {
@@ -177,28 +199,33 @@ export async function clearPaid(email) {
 	const billing = await loadBilling();
 	const key = String(email || "").toLowerCase();
 	if (billing.paid && key) delete billing.paid[key];
+	if (billing.trials && key) delete billing.trials[key];
 	await save(billing);
 }
 
 export async function markPaid(email, days) {
-	const span = Math.max(Number(days) || 30, 1);
-	const until = new Date(Date.now() + span * 24 * 60 * 60 * 1000).toISOString();
+	const until = untilStamp(days || 30);
 	return grant(email, until, {});
 }
 
 export function describeClient(tenant, billing) {
 	const email = String(tenant.email || "").toLowerCase();
-	const active = isActive(billing, email);
+	const paidUntil = email ? billing.paid?.[email] || null : null;
+	const trialUntil = email ? billing.trials?.[email] || null : null;
+	const paid = future(paidUntil);
+	const trial = future(trialUntil);
 	let payment = "Not paid";
 	if (!email) payment = "No email";
-	else if (active) payment = "Active";
+	else if (paid) payment = "Active";
+	else if (trial) payment = "Trial";
 	return {
 		id: tenant.id,
 		email: tenant.email || "",
 		created_at: tenant.created_at || null,
 		disabled: Boolean(tenant.disabled),
-		paid_until: email ? billing.paid?.[email] || null : null,
-		active,
+		paid_until: paid ? paidUntil : null,
+		trial_until: trialUntil,
+		active: paid || trial,
 		payment,
 	};
 }

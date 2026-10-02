@@ -9,7 +9,7 @@ import { logger } from "./logger.js";
 import { getAdminEmail, setAdminEmail } from "./adminStore.js";
 import { mailConfigured, publicOrigin, sendWelcome } from "./mail.js";
 import { listMail, publicMail, saveMailSettings } from "./mailserver.js";
-import { charge, clearPaid, describeClient, grant, isActive, loadBilling, markPaid, notifySite, publicOffer, requireSending, saveConfig } from "./billing.js";
+import { charge, clearPaid, describeClient, grant, isActive, loadBilling, markPaid, notifySite, publicOffer, requireSending, saveConfig, startTrial } from "./billing.js";
 import { createTenant, clientIdFor, deleteTenant, findTenantByEmail, getTenant, listTenants, setTenantEnabled } from "./tenants.js";
 
 /** Turns a rejected promise into a JSON error instead of an unhandled rejection. */
@@ -160,6 +160,7 @@ export function buildRouter(manager) {
 				return res.status(400).json({ ok: false, error: "A valid email is required" });
 			}
 			const created = await createTenant(clientIdFor(email, (req.body || {}).id), email, { limit: config.maxTenants });
+			const trialUntil = await startTrial(email);
 			const sessions = await ensureInstance(manager, created.id);
 			const instanceId = sessions[0]?.session || "";
 			const origin = publicOrigin(req);
@@ -172,6 +173,7 @@ export function buildRouter(manager) {
 						token: created.token,
 						origin,
 						instanceId,
+						trialUntil,
 					});
 					emailed = true;
 				} catch (error) {
@@ -218,6 +220,7 @@ export function buildRouter(manager) {
 		wrap(async (req, res) => {
 			const billing = await loadBilling();
 			const tenant = req.access?.role === "tenant" ? await getTenant(req.access.id) : null;
+			const view = tenant ? describeClient(tenant, billing) : null;
 			return res.json({
 				ok: true,
 				enabled: Boolean(billing.enabled),
@@ -225,7 +228,10 @@ export function buildRouter(manager) {
 				amount: billing.amount,
 				currency: billing.currency,
 				method: billing.method,
-				active: isActive(billing, tenant?.email),
+				active: Boolean(view?.active),
+				payment: view?.payment || "Not paid",
+				trial_until: view?.trial_until || null,
+				paid_until: view?.paid_until || null,
 			});
 		}),
 	);
@@ -283,6 +289,9 @@ export function buildRouter(manager) {
 				if (!tenant.email) return res.status(400).json({ ok: false, error: "This client has no email" });
 				const billing = await loadBilling();
 				await markPaid(tenant.email, billing.period_days);
+			} else if (body.status === "Trial") {
+				if (!tenant.email) return res.status(400).json({ ok: false, error: "This client has no email" });
+				await startTrial(tenant.email);
 			} else if (body.status) {
 				await clearPaid(tenant.email);
 			}

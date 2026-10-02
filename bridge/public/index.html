@@ -651,9 +651,12 @@
 		}
 		card.classList.remove("hidden");
 		const price = status.amount + " " + (status.currency || "");
-		$("sub-lead").textContent = status.active
-			? "This client is paid through the current period (" + price + ")."
-			: "Pay " + price + " to keep this number able to send.";
+		const until = (status.trial_until || "").replace("T", " ").slice(0, 16);
+		$("sub-lead").textContent = status.payment === "Trial"
+			? "Trial through " + until + ". Then pay " + price + "."
+			: status.payment === "Active"
+				? "This client is paid through the current period (" + price + ")."
+				: "Pay " + price + " to keep this number able to send.";
 		show("pay-phone", status.method !== "Card subscription");
 		const label = card.querySelector("label");
 		if (label) label.classList.toggle("hidden", status.method === "Card subscription");
@@ -693,7 +696,7 @@
 				<td>${escapeHtml(row.id)}</td>
 				<td>${escapeHtml(row.email || "")}</td>
 				${withActions
-					? `<td><span class="pill ${row.active ? "connected" : ""}">${escapeHtml(row.payment || "Not paid")}</span></td><td>${row.disabled ? "Disabled" : "Enabled"}</td><td><button class="btn ghost" type="button" data-remove="${escapeHtml(row.id)}">Remove</button></td>`
+					? `<td><span class="pill ${row.payment === "Active" ? "connected" : row.payment === "Trial" ? "pairing" : ""}">${escapeHtml(row.payment || "Not paid")}</span></td><td>${row.disabled ? "Disabled" : "Enabled"}</td><td><button class="btn ghost" type="button" data-remove="${escapeHtml(row.id)}">Remove</button></td>`
 					: `<td>${escapeHtml((row.created_at || "").replace("T", " ").slice(0, 16))}</td>`}
 			</tr>`).join("") || `<tr><td colspan="${withActions ? 5 : 3}">No clients yet.</td></tr>`;
 	}

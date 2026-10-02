@@ -339,7 +339,7 @@ IntaSend’s [subscriptions API](https://developers.intasend.com/guides/subscrip
 A completed payment is confirmed by the webhook
 ([challenge check](https://developers.intasend.com/guides/webhooks)). When **Require an Active Subscription**
 is on, sending fails until that email is paid for the current period.
-A completed payment emails a receipt. New signups are copied to **Bridge Subscription**
+A new signup can send for five days before a payment is required. That trial is listed as **Trial** with its end time on the client list. Marking the client **Active** starts a paid period. **Not paid** ends both the trial and any paid period. A completed payment emails a receipt. New signups are copied to **Bridge Subscription**
 on the operator site (and again when you save AgentX Settings, or press **Sync clients**).
 
 ## Mail

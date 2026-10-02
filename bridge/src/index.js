@@ -24,7 +24,7 @@ app.use(express.json({ limit: "25mb" }));
 app.get("/health", (req, res) => res.json({ ok: true, sessions: manager.list().length }));
 
 // The onboarding page. A missing file used to fall through to "Cannot GET /".
-app.get(["/", "/index.html", "/admin", "/admin/"], (_req, res) => {
+app.get(["/", "/index.html", "/admin", "/admin/", "/docs", "/docs/"], (_req, res) => {
 	res.sendFile(path.join(publicDir, "index.html"), (error) => {
 		if (error) {
 			logger.error({ err: error.message }, "onboarding page is not in this install");

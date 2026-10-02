@@ -173,6 +173,36 @@ export async function charge(billing, email, phone) {
 	return { invoice_id: body.invoice?.invoice_id || "", state: body.invoice?.state || "PENDING" };
 }
 
+export async function clearPaid(email) {
+	const billing = await loadBilling();
+	const key = String(email || "").toLowerCase();
+	if (billing.paid && key) delete billing.paid[key];
+	await save(billing);
+}
+
+export async function markPaid(email, days) {
+	const span = Math.max(Number(days) || 30, 1);
+	const until = new Date(Date.now() + span * 24 * 60 * 60 * 1000).toISOString();
+	return grant(email, until, {});
+}
+
+export function describeClient(tenant, billing) {
+	const email = String(tenant.email || "").toLowerCase();
+	const active = isActive(billing, email);
+	let payment = "Not paid";
+	if (!email) payment = "No email";
+	else if (active) payment = "Active";
+	return {
+		id: tenant.id,
+		email: tenant.email || "",
+		created_at: tenant.created_at || null,
+		disabled: Boolean(tenant.disabled),
+		paid_until: email ? billing.paid?.[email] || null : null,
+		active,
+		payment,
+	};
+}
+
 export async function requirePaid(email) {
 	const billing = await loadBilling();
 	if (!billing.enabled || !billing.required) return;
@@ -181,4 +211,13 @@ export async function requirePaid(email) {
 		error.statusCode = 402;
 		throw error;
 	}
+}
+
+export async function requireSending(tenant) {
+	if (tenant?.disabled) {
+		const error = new Error("This client is disabled");
+		error.statusCode = 403;
+		throw error;
+	}
+	await requirePaid(tenant?.email);
 }

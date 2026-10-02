@@ -231,6 +231,100 @@ for this server, or a tenant token for another site.
 | POST | `/api/billing/pay` | Client token. `{phone}` starts an M-Pesa prompt, or returns a card `setup_url` |
 | POST | `/api/billing/config` | Master token. The ERPNext site writes the plan here |
 | POST | `/api/billing/grant` | Master token. Marks an email paid until a date |
+| GET | `/api/billing/clients` | Master token. Clients with payment and whether sending is enabled |
+| POST | `/api/billing/clients/:id` | Master token. `{enabled}` and/or `{status:"Active"}` to mark paid. Any other status clears payment |
+
+Send `Authorization: Bearer <token>` on every call below except `/health` and the public signup and login routes. `BRIDGE_API_TOKEN` is the operator token. A client token only sees that client's sessions. The service number's instance id is `service`, and its access token is the operator token.
+
+### Examples
+
+Health, no token:
+
+```bash
+curl -s https://whatsapp.site.com/health
+```
+
+Create a client. The response includes `token` and `instance_id` once.
+
+```bash
+curl -s -X POST https://whatsapp.site.com/api/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"acme","email":"you@company.com"}'
+```
+
+Sign in again with that email. The same token comes back.
+
+```bash
+curl -s -X POST https://whatsapp.site.com/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@company.com"}'
+```
+
+Link a phone. Use the client token. `INSTANCE` is the instance id from signup.
+
+```bash
+curl -s -X POST https://whatsapp.site.com/api/sessions/INSTANCE/start \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"webhook_url":"https://erp.example.com/api/method/agent_x.core.webhook.receive","webhook_secret":"replace-me"}'
+
+curl -s https://whatsapp.site.com/api/sessions/INSTANCE/qr \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Or a pairing code instead of the QR:
+
+```bash
+curl -s -X POST https://whatsapp.site.com/api/sessions/INSTANCE/pair \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"254712345678"}'
+```
+
+Send a text or a picture:
+
+```bash
+curl -s -X POST https://whatsapp.site.com/api/sessions/INSTANCE/send \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"to":"254712345678","text":"Hello"}'
+
+curl -s -X POST https://whatsapp.site.com/api/sessions/INSTANCE/send \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"to":"254712345678","media":{"url":"https://example.com/photo.jpg","caption":"Photo"}}'
+```
+
+When a subscription is required and this email is not paid, send returns `402`. When the operator has disabled the client, send returns `403`.
+
+The same apps that talk to WaClient can keep `access_token` and `instance_id` in the body. Paths sit on the site root, not under `/api`:
+
+```bash
+curl -s -X POST https://whatsapp.site.com/send \
+  -H 'Content-Type: application/json' \
+  -d '{"access_token":"'"$TOKEN"'","instance_id":"INSTANCE","number":"254712345678","message":"Hello"}'
+```
+
+List clients and mark one paid through the current period. Master token only. `status` other than `Active` clears payment. `enabled: false` stops that client sending.
+
+```bash
+curl -s https://whatsapp.site.com/api/billing/clients \
+  -H "Authorization: Bearer $BRIDGE_API_TOKEN"
+
+curl -s -X POST https://whatsapp.site.com/api/billing/clients/acme \
+  -H "Authorization: Bearer $BRIDGE_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"Active","enabled":true}'
+```
+
+A signed-in client starts their own payment. Card plans return `setup_url`. M-Pesa returns `invoice_id`.
+
+```bash
+curl -s -X POST https://whatsapp.site.com/api/billing/pay \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"254712345678"}'
+```
 
 ## Subscriptions
 

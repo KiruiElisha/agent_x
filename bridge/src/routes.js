@@ -9,8 +9,8 @@ import { logger } from "./logger.js";
 import { getAdminEmail, setAdminEmail } from "./adminStore.js";
 import { mailConfigured, publicOrigin, sendWelcome } from "./mail.js";
 import { listMail } from "./mailserver.js";
-import { charge, grant, isActive, loadBilling, notifySite, publicOffer, requirePaid, saveConfig } from "./billing.js";
-import { createTenant, deleteTenant, findTenantByEmail, getTenant, listTenants } from "./tenants.js";
+import { charge, clearPaid, describeClient, grant, isActive, loadBilling, markPaid, notifySite, publicOffer, requireSending, saveConfig } from "./billing.js";
+import { createTenant, deleteTenant, findTenantByEmail, getTenant, listTenants, setTenantEnabled } from "./tenants.js";
 
 /** Turns a rejected promise into a JSON error instead of an unhandled rejection. */
 function wrap(handler) {
@@ -227,6 +227,50 @@ export function buildRouter(manager) {
 	);
 
 	router.get(
+		"/billing/clients",
+		requireAdmin,
+		wrap(async (_req, res) => {
+			const billing = await loadBilling();
+			const clients = (await listTenants()).map((tenant) => describeClient(tenant, billing));
+			return res.json({
+				ok: true,
+				clients,
+				plan: publicOffer(billing),
+				service: { instance_id: "service" },
+			});
+		}),
+	);
+
+	router.post(
+		"/billing/clients/:id",
+		requireAdmin,
+		wrap(async (req, res) => {
+			const body = req.body || {};
+			if (body.enabled !== undefined) {
+				const enabled = body.enabled === true || body.enabled === 1 || body.enabled === "1" || body.enabled === "true"
+					? true
+					: body.enabled === false || body.enabled === 0 || body.enabled === "0" || body.enabled === "false"
+						? false
+						: null;
+				if (enabled === null) return res.status(400).json({ ok: false, error: "enabled must be true or false" });
+				const updated = await setTenantEnabled(req.params.id, enabled);
+				if (!updated) return res.status(404).json({ ok: false, error: "unknown client" });
+			}
+			const tenant = await getTenant(req.params.id);
+			if (!tenant) return res.status(404).json({ ok: false, error: "unknown client" });
+			if (body.status === "Active") {
+				if (!tenant.email) return res.status(400).json({ ok: false, error: "This client has no email" });
+				const billing = await loadBilling();
+				await markPaid(tenant.email, billing.period_days);
+			} else if (body.status) {
+				await clearPaid(tenant.email);
+			}
+			const billing = await loadBilling();
+			return res.json({ ok: true, client: describeClient(tenant, billing) });
+		}),
+	);
+
+	router.get(
 		"/mail",
 		requireAdmin,
 		wrap(async (_req, res) => res.json({ ok: true, messages: await listMail() })),
@@ -255,7 +299,11 @@ export function buildRouter(manager) {
 	router.get(
 		"/tenants",
 		requireAdmin,
-		wrap(async (req, res) => res.json({ ok: true, tenants: await listTenants() })),
+		wrap(async (_req, res) => {
+			const billing = await loadBilling();
+			const tenants = (await listTenants()).map((tenant) => describeClient(tenant, billing));
+			return res.json({ ok: true, tenants });
+		}),
 	);
 
 	router.delete(
@@ -366,8 +414,7 @@ export function buildRouter(manager) {
 			const session = manager.owned(req.params.id, req.access);
 			if (!session) return missing(res, req.params.id);
 			if (req.access?.role === "tenant") {
-				const tenant = await getTenant(req.access.id);
-				await requirePaid(tenant?.email);
+				await requireSending(await getTenant(req.access.id));
 			}
 
 			const { to, text, media } = req.body || {};

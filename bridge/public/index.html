@@ -143,6 +143,23 @@
 		#pairing-code { font: 600 32px/1.2 ui-monospace, monospace; letter-spacing: 3px; }
 		.actions-row { display: flex; gap: 8px; margin-top: 14px; }
 		.actions-row .btn { flex: 1; }
+		.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+		.topbar a { color: inherit; text-decoration: none; }
+		.doc-links { display: flex; gap: 8px; }
+		.docs { display: grid; gap: 12px; max-width: 760px; }
+		.docs h1 { font-size: 32px; letter-spacing: -0.04em; margin-bottom: 8px; }
+		.endpoint { display: flex; gap: 10px; align-items: baseline; margin-top: 14px; }
+		.verb { font: 12px/1 ui-monospace, monospace; letter-spacing: 0.04em; padding: 4px 6px; border-radius: 6px; background: var(--paper); }
+		.docs pre {
+			margin: 10px 0 0;
+			padding: 12px;
+			background: #1c1917;
+			color: #fafaf9;
+			border-radius: 10px;
+			overflow: auto;
+			font: 13px/1.5 ui-monospace, monospace;
+		}
+		.docs table td:first-child { width: 28%; font-family: ui-monospace, monospace; font-size: 13px; }
 		@media (max-width: 860px) {
 			.stage, .stats, .split, .shell, .creds, .link-grid, .methods { grid-template-columns: 1fr; }
 			.hero h1 { font-size: 32px; }
@@ -153,6 +170,10 @@
 </head>
 <body>
 <section id="login" class="gate">
+	<div class="topbar">
+		<div class="brand">WhatsApp API</div>
+		<a class="btn ghost" id="docs-link" href="/docs">API documentation</a>
+	</div>
 	<div class="stage">
 		<div class="hero">
 			<div class="brand">WhatsApp API</div>
@@ -242,6 +263,101 @@
 	</div>
 </section>
 
+<section id="docs" class="gate hidden">
+	<div class="topbar">
+		<a class="brand" id="home-link" href="/">WhatsApp API</a>
+		<a class="btn ghost" id="home-btn" href="/">Sign in</a>
+	</div>
+	<div class="docs">
+		<h1>API documentation</h1>
+		<p style="color:var(--muted)">Send these requests to <strong data-origin></strong>. Public signup and login do not need a token. Every other call sends <code>Authorization: Bearer</code> with either the client access token or the operator token.</p>
+
+		<div class="card">
+			<h2>Authentication</h2>
+			<p class="lead">A client token can only open its own numbers. The operator token can open every number, including the service number whose instance id is <code>service</code>.</p>
+			<table>
+				<thead><tr><th>Value</th><th>Where it comes from</th></tr></thead>
+				<tbody>
+					<tr><td>Instance ID</td><td>Signup, or <code>service</code> for the operator phone</td></tr>
+					<tr><td>Access token</td><td>Signup or sign-in. The operator phone uses the bridge API token</td></tr>
+					<tr><td>Webhook URL</td><td>You choose where inbound messages are posted</td></tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div class="card">
+			<h2>Create a client</h2>
+			<div class="endpoint"><span class="verb">POST</span><code>/api/signup</code></div>
+			<p class="lead">No token. The response includes the access token and instance id once.</p>
+			<pre>curl -s -X POST <span data-origin></span>/api/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"acme","email":"you@company.com"}'</pre>
+			<div class="endpoint"><span class="verb">POST</span><code>/api/login</code></div>
+			<pre>curl -s -X POST <span data-origin></span>/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@company.com"}'</pre>
+		</div>
+
+		<div class="card">
+			<h2>Link a phone</h2>
+			<div class="endpoint"><span class="verb">POST</span><code>/api/sessions/INSTANCE/start</code></div>
+			<pre>curl -s -X POST <span data-origin></span>/api/sessions/INSTANCE/start \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"webhook_url":"https://erp.example.com/hook","webhook_secret":"replace-me"}'</pre>
+			<div class="endpoint"><span class="verb">GET</span><code>/api/sessions/INSTANCE/qr</code></div>
+			<p class="lead">Returns the QR image as a data URL. Use the pair call when the phone should type a code instead.</p>
+			<pre>curl -s -X POST <span data-origin></span>/api/sessions/INSTANCE/pair \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"254712345678"}'</pre>
+		</div>
+
+		<div class="card">
+			<h2>Send</h2>
+			<div class="endpoint"><span class="verb">POST</span><code>/api/sessions/INSTANCE/send</code></div>
+			<pre>curl -s -X POST <span data-origin></span>/api/sessions/INSTANCE/send \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"to":"254712345678","text":"Hello"}'</pre>
+			<p class="lead">A picture uses <code>media</code> with a <code>url</code> and an optional <code>caption</code>. An unpaid client returns 402 when a subscription is required. A disabled client returns 403.</p>
+			<div class="endpoint"><span class="verb">POST</span><code>/send</code></div>
+			<p class="lead">Same call an existing WaClient app already makes. Put the token and instance id in the body. The path is on this site, not under <code>/api</code>.</p>
+			<pre>curl -s -X POST <span data-origin></span>/send \
+  -H 'Content-Type: application/json' \
+  -d '{"access_token":"TOKEN","instance_id":"INSTANCE","number":"254712345678","message":"Hello"}'</pre>
+		</div>
+
+		<div class="card">
+			<h2>Subscriptions</h2>
+			<div class="endpoint"><span class="verb">POST</span><code>/api/billing/pay</code></div>
+			<p class="lead">Client token. M-Pesa returns <code>invoice_id</code>. A card plan returns <code>setup_url</code>.</p>
+			<pre>curl -s -X POST <span data-origin></span>/api/billing/pay \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"254712345678"}'</pre>
+			<div class="endpoint"><span class="verb">GET</span><code>/api/billing/status</code></div>
+			<p class="lead">Tells this client whether the subscription is active, the price, and how payment is collected.</p>
+		</div>
+
+		<div class="card">
+			<h2>Other calls</h2>
+			<table>
+				<thead><tr><th>Call</th><th>Purpose</th></tr></thead>
+				<tbody>
+					<tr><td>GET /health</td><td>Liveness. No token</td></tr>
+					<tr><td>GET /api/sessions</td><td>State of this token's numbers</td></tr>
+					<tr><td>POST /api/sessions/INSTANCE/check</td><td>Body <code>{"number"}</code>. Is this phone on WhatsApp</td></tr>
+					<tr><td>POST /api/sessions/INSTANCE/logout</td><td>Unlink the phone and forget the session</td></tr>
+					<tr><td>POST /create_instance</td><td>WaClient shape. Body <code>access_token</code>. Returns a new instance id</td></tr>
+					<tr><td>POST /get_qrcode</td><td>WaClient shape. Body <code>access_token</code> and <code>instance_id</code></td></tr>
+					<tr><td>POST /set_webhook</td><td>WaClient shape. Body <code>webhook_url</code></td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</section>
+
 <div id="app" class="shell hidden">
 	<aside id="nav" class="nav hidden">
 		<strong>WhatsApp API</strong>
@@ -284,11 +400,15 @@
 				</div>
 				<div>
 					<div class="card">
-						<h2>From here</h2>
-						<p style="color:var(--muted);font-size:14px;margin-top:8px">Issue a token for someone who will not sign up themselves, or open Numbers to link the service WhatsApp.</p>
+						<h2>Service number</h2>
+						<p class="lead">The instance id and access token for the operator phone. Paste them into an app that should send as this number.</p>
+						<label>Instance ID</label>
+						<div class="copyline"><code id="svc-instance">service</code><button class="btn ghost" type="button" data-copy="svc-instance">Copy</button></div>
+						<label>Access token</label>
+						<div class="copyline"><code id="svc-token"></code><button class="btn ghost" type="button" data-copy="svc-token">Copy</button></div>
 						<div class="row" style="margin-top:16px">
-							<button class="btn" type="button" data-go="clients">Clients</button>
-							<button class="btn ghost" type="button" data-go="numbers">Link the service number</button>
+							<button class="btn" type="button" data-go="numbers">Link this number</button>
+							<button class="btn ghost" type="button" data-go="clients">Clients</button>
 						</div>
 					</div>
 				</div>
@@ -300,7 +420,7 @@
 				<div class="card">
 					<h2>Clients</h2>
 					<table>
-						<thead><tr><th>Client</th><th>Email</th><th></th></tr></thead>
+						<thead><tr><th>Client</th><th>Email</th><th>Payment</th><th>Access</th><th></th></tr></thead>
 						<tbody id="tenant-rows"></tbody>
 					</table>
 				</div>
@@ -328,6 +448,20 @@
 		</section>
 
 		<section data-panel-view="numbers">
+			<div id="service-creds" class="card hidden" style="margin-bottom:16px">
+				<h2>Service number credentials</h2>
+				<p class="lead">This is the operator session. The access token is the bridge API token you signed in with.</p>
+				<div class="creds">
+					<div>
+						<label>Instance ID</label>
+						<div class="copyline"><code id="svc-instance-link">service</code><button class="btn ghost" type="button" data-copy="svc-instance-link">Copy</button></div>
+					</div>
+					<div>
+						<label>Access token</label>
+						<div class="copyline"><code id="svc-token-link"></code><button class="btn ghost" type="button" data-copy="svc-token-link">Copy</button></div>
+					</div>
+				</div>
+			</div>
 			<div id="creds" class="card hidden" style="margin-bottom:16px">
 				<h2>Copy into your app</h2>
 				<p style="color:var(--muted);font-size:13px;margin-top:6px">Paste these into the app. The API address is this site. Inbound messages go to the webhook you set while linking.</p>
@@ -422,8 +556,14 @@
 	const $ = (id) => document.getElementById(id);
 	const pagePath = location.pathname.replace(/\/$/, "");
 	const onAdminPath = pagePath === "/admin" || pagePath.endsWith("/admin");
-	const mount = pagePath.replace(/\/admin$/, "");
+	const onDocsPath = pagePath === "/docs" || pagePath.endsWith("/docs");
+	const mount = pagePath.replace(/\/(admin|docs)$/, "");
 	const api = (path) => mount + path;
+	const siteOrigin = location.origin + (mount || "");
+	$("docs-link").href = siteOrigin + "/docs";
+	$("home-link").href = siteOrigin + "/";
+	$("home-btn").href = siteOrigin + "/";
+	document.querySelectorAll("[data-origin]").forEach((node) => { node.textContent = siteOrigin; });
 
 	let operatorEmail = sessionStorage.getItem("agentx-operator-email") || "";
 	let activeEmail = sessionStorage.getItem("agentx-email") || "";
@@ -481,7 +621,9 @@
 		$("who").textContent = role === "admin" ? "Admin" : "Your numbers";
 		$("sub").textContent = role === "admin" ? "Every client on this bridge" : activeEmail;
 		show("back", Boolean(operatorEmail) && activeEmail !== operatorEmail);
+		show("service-creds", role === "admin");
 		if (role === "admin") {
+			paintServiceCreds();
 			await loadTenants();
 			showPanel("overview");
 		} else {
@@ -531,14 +673,24 @@
 		}
 	};
 
+	function paintServiceCreds() {
+		const token = activeToken || "";
+		for (const id of ["svc-token", "svc-token-link"]) {
+			const node = $(id);
+			if (node) node.textContent = token;
+		}
+	}
+
 	function paintTenantTable(rows, target, withActions) {
 		const list = rows || [];
 		target.innerHTML = list.map((row) => `
 			<tr>
 				<td>${escapeHtml(row.id)}</td>
 				<td>${escapeHtml(row.email || "")}</td>
-				${withActions ? `<td><button class="btn ghost" type="button" data-remove="${escapeHtml(row.id)}">Remove</button></td>` : `<td>${escapeHtml((row.created_at || "").replace("T", " ").slice(0, 16))}</td>`}
-			</tr>`).join("") || `<tr><td colspan="3">No clients yet.</td></tr>`;
+				${withActions
+					? `<td><span class="pill ${row.active ? "connected" : ""}">${escapeHtml(row.payment || "Not paid")}</span></td><td>${row.disabled ? "Disabled" : "Enabled"}</td><td><button class="btn ghost" type="button" data-remove="${escapeHtml(row.id)}">Remove</button></td>`
+					: `<td>${escapeHtml((row.created_at || "").replace("T", " ").slice(0, 16))}</td>`}
+			</tr>`).join("") || `<tr><td colspan="${withActions ? 5 : 3}">No clients yet.</td></tr>`;
 	}
 
 	async function loadTenants() {
@@ -991,7 +1143,10 @@
 		if (lead) lead.textContent = "Create the client first. Payment is on the next screen, and the receipt goes to this email.";
 	}
 
-	if (onAdminPath) {
+	if (onDocsPath) {
+		show("login", false);
+		show("docs", true);
+	} else if (onAdminPath) {
 		prepareAdminPage().catch(() => {});
 	} else {
 		loadOffer().catch(() => {});

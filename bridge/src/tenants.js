@@ -93,7 +93,7 @@ export async function getTenant(id) {
 	const tenants = await read();
 	const row = tenants[id];
 	if (!row) return null;
-	return { id, email: row.email || "", token: row.token };
+	return { id, email: row.email || "", token: row.token, disabled: Boolean(row.disabled) };
 }
 
 export async function listTenants() {
@@ -102,7 +102,19 @@ export async function listTenants() {
 		id,
 		email: row.email || "",
 		created_at: row.created_at || null,
+		disabled: Boolean(row.disabled),
 	}));
+}
+
+export async function setTenantEnabled(id, enabled) {
+	assertTenantId(id);
+	return locked(async () => {
+		const tenants = await read();
+		if (!tenants[id]) return false;
+		tenants[id].disabled = !enabled;
+		await write(tenants);
+		return true;
+	});
 }
 
 export async function deleteTenant(id) {

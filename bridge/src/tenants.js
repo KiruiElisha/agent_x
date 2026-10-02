@@ -50,6 +50,14 @@ export function assertTenantId(id) {
 	return id;
 }
 
+/** One id shape for signup, the admin page, and an external app. Blank means we choose it. */
+export function clientIdFor(email, requested) {
+	const given = String(requested || "").trim().toLowerCase();
+	if (given) return assertTenantId(given);
+	const local = String(email || "client").split("@")[0].toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "client";
+	return assertTenantId(`${local}-${crypto.randomBytes(2).toString("hex")}`.slice(0, 32));
+}
+
 export async function createTenant(id, email = "", { limit } = {}) {
 	assertTenantId(id);
 	return locked(async () => {

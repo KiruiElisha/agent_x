@@ -8,9 +8,9 @@ import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { getAdminEmail, setAdminEmail } from "./adminStore.js";
 import { mailConfigured, publicOrigin, sendWelcome } from "./mail.js";
-import { listMail } from "./mailserver.js";
+import { listMail, publicMail, saveMailSettings } from "./mailserver.js";
 import { charge, clearPaid, describeClient, grant, isActive, loadBilling, markPaid, notifySite, publicOffer, requireSending, saveConfig } from "./billing.js";
-import { createTenant, deleteTenant, findTenantByEmail, getTenant, listTenants, setTenantEnabled } from "./tenants.js";
+import { createTenant, clientIdFor, deleteTenant, findTenantByEmail, getTenant, listTenants, setTenantEnabled } from "./tenants.js";
 
 /** Turns a rejected promise into a JSON error instead of an unhandled rejection. */
 function wrap(handler) {
@@ -25,16 +25,17 @@ function newInstanceId() {
 	return crypto.randomBytes(7).toString("hex").toUpperCase();
 }
 
-const codes = new Map();
-const SERVICE = "service";
-
-async function ensureInstance(manager, tenantId) {
+/** One instance per client. Opening it again does not unlink a phone that is already connected. */
+export async function ensureInstance(manager, tenantId) {
 	const access = { role: "tenant", id: tenantId };
 	const existing = manager.list(access);
 	if (existing.length) return existing;
 	await manager.open(newInstanceId(), access, { webhook_style: "waclient" });
 	return manager.list(access);
 }
+
+const codes = new Map();
+const SERVICE = "service";
 
 function serviceSession(manager) {
 	return manager.owned(SERVICE, { role: "admin" });
@@ -45,6 +46,25 @@ async function sendFromService(manager, to, text) {
 	if (!session || session.state !== "connected") return false;
 	await session.sendText(to, text);
 	return true;
+}
+
+async function notifyPaid(manager, email, until) {
+	const key = String(email || "").toLowerCase();
+	const tenant = (await listTenants()).find((row) => String(row.email || "").toLowerCase() === key);
+	const phone = tenant
+		? manager.list({ role: "tenant", id: tenant.id }).find((session) => session.phone)?.phone
+		: "";
+	if (!phone) return;
+	const when = until ? String(until).replace("T", " ").slice(0, 16) : "";
+	try {
+		await sendFromService(
+			manager,
+			phone,
+			`Your WhatsApp API subscription is active${when ? ` until ${when}` : ""}.`,
+		);
+	} catch (error) {
+		logger.warn({ err: error.message, email: key }, "could not send the subscription notice");
+	}
 }
 
 export function buildRouter(manager) {
@@ -139,7 +159,7 @@ export function buildRouter(manager) {
 			if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 				return res.status(400).json({ ok: false, error: "A valid email is required" });
 			}
-			const created = await createTenant((req.body || {}).id, email, { limit: config.maxTenants });
+			const created = await createTenant(clientIdFor(email, (req.body || {}).id), email, { limit: config.maxTenants });
 			const sessions = await ensureInstance(manager, created.id);
 			const instanceId = sessions[0]?.session || "";
 			const origin = publicOrigin(req);
@@ -188,6 +208,7 @@ export function buildRouter(manager) {
 		wrap(async (req, res) => {
 			const body = req.body || {};
 			const saved = await grant(body.email, body.paid_until, body);
+			await notifyPaid(manager, body.email, body.paid_until);
 			return res.json({ ok: true, emailed: Boolean(saved?.emailed) });
 		}),
 	);
@@ -266,7 +287,9 @@ export function buildRouter(manager) {
 				await clearPaid(tenant.email);
 			}
 			const billing = await loadBilling();
-			return res.json({ ok: true, client: describeClient(tenant, billing) });
+			const client = describeClient(await getTenant(req.params.id), billing);
+			if (body.status === "Active") await notifyPaid(manager, client.email, client.paid_until);
+			return res.json({ ok: true, client });
 		}),
 	);
 
@@ -274,6 +297,18 @@ export function buildRouter(manager) {
 		"/mail",
 		requireAdmin,
 		wrap(async (_req, res) => res.json({ ok: true, messages: await listMail() })),
+	);
+
+	router.get(
+		"/mail/config",
+		requireAdmin,
+		wrap(async (_req, res) => res.json({ ok: true, ...publicMail() })),
+	);
+
+	router.post(
+		"/mail/config",
+		requireAdmin,
+		wrap(async (req, res) => res.json({ ok: true, ...(await saveMailSettings(req.body || {})) })),
 	);
 
 	router.post(
@@ -290,9 +325,9 @@ export function buildRouter(manager) {
 		requireAdmin,
 		wrap(async (req, res) => {
 			const created = await createTenant((req.body || {}).id);
+			const sessions = await ensureInstance(manager, created.id);
 			await notifySite(created);
-			// The token is returned once. It is not listed afterwards.
-			return res.json({ ok: true, ...created });
+			return res.json({ ok: true, instance_id: sessions[0]?.session || "", ...created });
 		}),
 	);
 

@@ -224,8 +224,8 @@
 			<div class="card" id="signup-card">
 				<h2>Create a client</h2>
 				<p class="lead">The token is shown after this and sent to the email.</p>
-				<label for="signup-id">Client id</label>
-				<input id="signup-id" placeholder="acme" autocomplete="off" />
+				<label for="signup-id">Client id, optional</label>
+				<input id="signup-id" placeholder="Leave blank and we create it" autocomplete="off" />
 				<label for="signup-email">Email</label>
 				<input id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" />
 				<div class="row" style="margin-top:14px">
@@ -565,9 +565,9 @@
 	$("home-btn").href = siteOrigin + "/";
 	document.querySelectorAll("[data-origin]").forEach((node) => { node.textContent = siteOrigin; });
 
-	let operatorEmail = sessionStorage.getItem("agentx-operator-email") || "";
-	let activeEmail = sessionStorage.getItem("agentx-email") || "";
-	let activeToken = "";
+	let operatorEmail = localStorage.getItem("agentx-operator-email") || sessionStorage.getItem("agentx-operator-email") || "";
+	let activeEmail = localStorage.getItem("agentx-email") || sessionStorage.getItem("agentx-email") || "";
+	let activeToken = localStorage.getItem("agentx-token") || sessionStorage.getItem("agentx-token") || "";
 	let role = "tenant";
 	let poll = null;
 	let sessions = [];
@@ -603,6 +603,8 @@
 	async function signIn(token) {
 		activeToken = token.trim();
 		if (!activeToken) throw new Error("A token is required");
+		localStorage.setItem("agentx-token", activeToken);
+		if (activeEmail) localStorage.setItem("agentx-email", activeEmail);
 		let tenants = null;
 		try {
 			tenants = await call("GET", "/api/tenants");
@@ -864,8 +866,10 @@
 		$("signin").textContent = "Continue";
 		activeEmail = email;
 		sessionStorage.setItem("agentx-email", email);
+		localStorage.setItem("agentx-email", email);
 		if (data.role === "admin") {
 			operatorEmail = email;
+			localStorage.setItem("agentx-operator-email", email);
 			sessionStorage.setItem("agentx-operator-email", email);
 		}
 		await signIn(data.token || "");
@@ -887,6 +891,7 @@
 				$("signin").textContent = "Continue";
 				activeEmail = email;
 				sessionStorage.setItem("agentx-email", email);
+				localStorage.setItem("agentx-email", email);
 				await signIn(data.token || "");
 				renderCreds(data.token, (data.instances || []).map((row) => ({ session: row.instance_id })));
 				return;
@@ -917,6 +922,7 @@
 			show("welcome", true);
 			activeEmail = $("signup-email").value.trim().toLowerCase();
 			sessionStorage.setItem("agentx-email", activeEmail);
+			localStorage.setItem("agentx-email", activeEmail);
 			await signIn(data.token || "");
 			renderCreds(data.token, [{ session: data.instance_id }]);
 		} catch (error) {
@@ -926,10 +932,10 @@
 
 	$("signout").onclick = () => {
 		stopPoll();
-		sessionStorage.removeItem("agentx-email");
-		sessionStorage.removeItem("agentx-operator-email");
-		sessionStorage.removeItem("agentx-token");
-		sessionStorage.removeItem("agentx-operator");
+		for (const key of ["agentx-email", "agentx-operator-email", "agentx-token", "agentx-operator"]) {
+			sessionStorage.removeItem(key);
+			localStorage.removeItem(key);
+		}
 		activeToken = "";
 		activeEmail = "";
 		operatorEmail = "";
@@ -1148,6 +1154,13 @@
 		show("docs", true);
 	} else if (onAdminPath) {
 		prepareAdminPage().catch(() => {});
+	} else if (activeToken) {
+		loadOffer().catch(() => {});
+		signIn(activeToken).catch(() => {
+			localStorage.removeItem("agentx-token");
+			activeToken = "";
+			show("login", true);
+		});
 	} else {
 		loadOffer().catch(() => {});
 		if (activeEmail) loginByEmail(activeEmail).catch(() => show("login", true));

@@ -4,10 +4,11 @@ import net from "node:net";
 import tls from "node:tls";
 
 import { config } from "./config.js";
-import { sendOut, storeMail } from "./mailserver.js";
+import { currentMail, sendOut, storeMail } from "./mailserver.js";
 
 export function mailConfigured() {
-	return Boolean((config.smtpHost && config.smtpFrom) || config.mailDomain);
+	const mail = currentMail();
+	return Boolean((mail.smtpHost && mail.smtpFrom) || mail.mailDomain);
 }
 
 /** Address shown to the client. Prefer BRIDGE_PUBLIC_URL. */
@@ -54,13 +55,14 @@ export async function sendReceipt({ to, amount, currency, paidUntil, invoiceId, 
 }
 
 async function deliver({ to, subject, text }) {
-	const from = config.smtpFrom || (config.mailDomain ? `WhatsApp API <receipts@${config.mailDomain}>` : "");
-	if (config.smtpHost && config.smtpFrom) {
+	const mail = currentMail();
+	const from = mail.smtpFrom || (mail.mailDomain ? `WhatsApp API <receipts@${mail.mailDomain}>` : "");
+	if (mail.smtpHost && mail.smtpFrom) {
 		try {
-			await deliverViaRelay({ to, subject, text, from: config.smtpFrom });
+			await deliverViaRelay({ to, subject, text, from: mail.smtpFrom, mail });
 			await storeMail({
 				direction: "out",
-				from: config.smtpFrom,
+				from: mail.smtpFrom,
 				to,
 				subject,
 				text,
@@ -70,7 +72,7 @@ async function deliver({ to, subject, text }) {
 		} catch (error) {
 			await storeMail({
 				direction: "out",
-				from: config.smtpFrom,
+				from: mail.smtpFrom,
 				to,
 				subject,
 				text,
@@ -83,10 +85,10 @@ async function deliver({ to, subject, text }) {
 	await sendOut({ to, subject, text, from });
 }
 
-async function deliverViaRelay({ to, subject, text, from }) {
+async function deliverViaRelay({ to, subject, text, from, mail }) {
 	const body = dotStuff(
 		[
-			`From: ${config.smtpFrom}`,
+			`From: ${mail.smtpFrom}`,
 			`To: ${to}`,
 			`Subject: ${subject}`,
 			"MIME-Version: 1.0",
@@ -96,19 +98,19 @@ async function deliverViaRelay({ to, subject, text, from }) {
 		].join("\r\n"),
 	);
 
-	const port = config.smtpPort || 587;
-	let socket = await open(config.smtpHost, port, port === 465);
+	const port = mail.smtpPort || 587;
+	let socket = await open(mail.smtpHost, port, port === 465);
 	await expect(socket, 220);
 	await command(socket, "EHLO agentx");
 	if (port !== 465) {
 		await command(socket, "STARTTLS", 220);
-		socket = await startTls(socket, config.smtpHost);
+		socket = await startTls(socket, mail.smtpHost);
 		await command(socket, "EHLO agentx");
 	}
-	if (config.smtpUser) {
+	if (mail.smtpUser) {
 		await command(socket, "AUTH LOGIN");
-		await command(socket, b64(config.smtpUser));
-		await command(socket, b64(config.smtpPassword || ""));
+		await command(socket, b64(mail.smtpUser));
+		await command(socket, b64(mail.smtpPassword || ""));
 	}
 	await command(socket, `MAIL FROM:<${addressOf(from)}>`);
 	await command(socket, `RCPT TO:<${to}>`);

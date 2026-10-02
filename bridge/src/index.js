@@ -8,7 +8,7 @@ import express from "express";
 import { loadStoredAdmin } from "./adminStore.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
-import { startMailServer } from "./mailserver.js";
+import { loadMailSettings, startMailServer } from "./mailserver.js";
 import { buildRouter, errorHandler } from "./routes.js";
 import { SessionManager } from "./session.js";
 import { buildWaClientRouter } from "./waclient.js";
@@ -42,6 +42,7 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 
 const server = app.listen(config.port, config.host, async () => {
 	await loadStoredAdmin();
+	await loadMailSettings();
 	logger.info({ host: config.host, port: config.port }, "bridge listening");
 	const mailServer = startMailServer();
 	server.mailServer = mailServer;

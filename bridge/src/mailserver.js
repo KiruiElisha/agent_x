@@ -19,6 +19,66 @@ function mailbox() {
 	return path.join(path.dirname(config.tenantsFile), "mail.json");
 }
 
+function settingsFile() {
+	return path.join(path.dirname(config.tenantsFile), "mail-settings.json");
+}
+
+let storedMail = null;
+
+export async function loadMailSettings() {
+	try {
+		storedMail = JSON.parse(await fs.readFile(settingsFile(), "utf8"));
+	} catch (error) {
+		if (error.code !== "ENOENT") throw error;
+		storedMail = null;
+	}
+}
+
+export function currentMail() {
+	const saved = storedMail || {};
+	return {
+		smtpHost: saved.smtpHost || config.smtpHost,
+		smtpPort: Number(saved.smtpPort || config.smtpPort || 587),
+		smtpUser: saved.smtpUser || config.smtpUser,
+		smtpPassword: saved.smtpPassword || config.smtpPassword,
+		smtpFrom: saved.smtpFrom || config.smtpFrom,
+		mailDomain: String(saved.mailDomain || config.mailDomain || "").toLowerCase(),
+	};
+}
+
+export function publicMail() {
+	const mail = currentMail();
+	return {
+		smtp_host: mail.smtpHost,
+		smtp_port: mail.smtpPort,
+		smtp_user: mail.smtpUser,
+		smtp_from: mail.smtpFrom,
+		mail_domain: mail.mailDomain,
+		has_password: Boolean(mail.smtpPassword),
+	};
+}
+
+export async function saveMailSettings(incoming) {
+	const next = { ...(storedMail || {}) };
+	const map = {
+		smtp_host: "smtpHost",
+		smtp_port: "smtpPort",
+		smtp_user: "smtpUser",
+		smtp_from: "smtpFrom",
+		mail_domain: "mailDomain",
+	};
+	for (const [from, to] of Object.entries(map)) {
+		if (incoming[from] !== undefined && incoming[from] !== null) next[to] = incoming[from];
+	}
+	if (incoming.smtp_password) next.smtpPassword = incoming.smtp_password;
+	storedMail = next;
+	await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
+	const temporary = `${settingsFile()}.tmp`;
+	await fs.writeFile(temporary, JSON.stringify(next));
+	await fs.rename(temporary, settingsFile());
+	return publicMail();
+}
+
 function address(value) {
 	const match = String(value || "").match(/<([^>]+)>/);
 	return (match ? match[1] : String(value || "")).trim().toLowerCase();
@@ -34,8 +94,9 @@ function loopback(ip) {
 }
 
 function fromAddress() {
-	if (config.smtpFrom) return config.smtpFrom;
-	if (config.mailDomain) return `WhatsApp API <receipts@${config.mailDomain}>`;
+	const mail = currentMail();
+	if (mail.smtpFrom) return mail.smtpFrom;
+	if (mail.mailDomain) return `WhatsApp API <receipts@${mail.mailDomain}>`;
 	return "receipts@localhost";
 }
 
@@ -97,7 +158,7 @@ function parsed(raw) {
 async function accept(envelope, raw) {
 	const message = parsed(raw);
 	const to = envelope.rcpt;
-	if (config.mailDomain && domain(to) === config.mailDomain) {
+	if (currentMail().mailDomain && domain(to) === currentMail().mailDomain) {
 		await storeMail({
 			direction: "in",
 			from: envelope.from,
@@ -127,7 +188,7 @@ export async function sendOut({ to, subject, text, from }) {
 		status: "queued",
 	};
 	try {
-		if (!config.mailDomain) {
+		if (!currentMail().mailDomain) {
 			throw new Error("Set BRIDGE_MAIL_DOMAIN or BRIDGE_SMTP_HOST so mail can leave this bridge");
 		}
 		await direct(sender, to, subject, text);
@@ -183,7 +244,7 @@ async function direct(from, to, subject, text) {
 				from: address(from),
 				to: address(to),
 				body: dotStuff(mime({ from, to, subject, text })),
-				ehlo: config.mailDomain,
+				ehlo: currentMail().mailDomain,
 			});
 			return;
 		} catch (error) {
@@ -311,7 +372,7 @@ function attach(socket) {
 				socket.write("250 OK\r\n");
 			} else if (upper.startsWith("RCPT TO:")) {
 				const rcpt = address(line.slice(8));
-				const allowed = (local && rcpt) || (config.mailDomain && domain(rcpt) === config.mailDomain);
+				const allowed = (local && rcpt) || (currentMail().mailDomain && domain(rcpt) === currentMail().mailDomain);
 				if (!allowed) {
 					socket.write("550 Relay denied\r\n");
 					continue;

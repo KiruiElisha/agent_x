@@ -7,6 +7,7 @@
  "field_order": [
   "email",
   "client_id",
+  "customer",
   "phone",
   "status",
   "column_break",
@@ -34,6 +35,14 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Client"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "read_only": 1
   },
   {
    "fieldname": "phone",

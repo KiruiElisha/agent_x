@@ -134,29 +134,84 @@ def remember_site(settings) -> None:
 		frappe.log_error(frappe.get_traceback(), "AgentX: could not register this site with the bridge")
 
 
+def ensure_customer(email: str, client_id: str = "") -> str | None:
+	"""A bridge client is also a Customer, when ERPNext is installed."""
+	if not frappe.db.exists("DocType", "Customer"):
+		return None
+	label = email.split("@", 1)[0] if email and "@" in email and not email.endswith("@clients") else (client_id or email)
+	name = None
+	if email:
+		name = frappe.db.get_value("Customer", {"customer_name": email}) or frappe.db.get_value("Customer", {"name": email})
+	if not name and label:
+		name = frappe.db.get_value("Customer", {"customer_name": label})
+	if name:
+		return name
+	group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
+	territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
+	doc = frappe.get_doc(
+		{
+			"doctype": "Customer",
+			"customer_name": (label or email)[:140],
+			"customer_type": "Individual",
+			"customer_group": group,
+			"territory": territory,
+		}
+	)
+	try:
+		doc.insert(ignore_permissions=True)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "AgentX: could not create a customer for a bridge client")
+		return None
+	if frappe.db.exists("DocType", "Contact") and "@" in (email or "") and not str(email).endswith("@clients"):
+		try:
+			frappe.get_doc(
+				{
+					"doctype": "Contact",
+					"first_name": (label or "Client")[:140],
+					"email_ids": [{"email_id": email, "is_primary": 1}],
+					"links": [{"link_doctype": "Customer", "link_name": doc.name}],
+				}
+			).insert(ignore_permissions=True)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "AgentX: could not attach an email to a bridge customer")
+	return doc.name
+
+
 def record_client(email: str, client_id: str = "", payment: str = "", paid_until=None, trial_until=None) -> None:
-	"""Create or refresh the subscription row for one bridge client."""
+	"""Create or refresh the subscription row for one bridge client.
+
+	A missing payment does not change an existing row. Completed payments stay
+	Active until the bridge explicitly reports Trial or Active.
+	"""
 	email = (email or "").strip().lower()
+	if not email and client_id:
+		email = f"{client_id.strip().lower()}@clients"
 	if not email:
 		return
-	if payment == "Active":
-		status, until = "Active", paid_until
-	elif payment == "Trial":
-		status, until = "Trial", trial_until
-	else:
-		status, until = "Signed up", None
-	values = {"client_id": client_id or None, "status": status}
-	if until:
-		values["paid_until"] = until
+	customer = ensure_customer(email, client_id)
+	until = paid_until if payment == "Active" else trial_until if payment == "Trial" else None
+	known = payment in ("Active", "Trial")
 	if frappe.db.exists("Bridge Subscription", email):
 		doc = frappe.get_doc("Bridge Subscription", email)
-		if client_id:
+		changed = False
+		if client_id and doc.client_id != client_id:
 			doc.client_id = client_id
-		doc.status = status
-		if until:
+			changed = True
+		if customer and doc.customer != customer:
+			doc.customer = customer
+			changed = True
+		if known and doc.status != payment:
+			doc.status = payment
+			changed = True
+		if known and until and str(doc.paid_until or "") != str(until):
 			doc.paid_until = until
-		doc.save(ignore_permissions=True)
+			changed = True
+		if changed:
+			doc.save(ignore_permissions=True)
 		return
+	values = {"client_id": client_id or None, "status": payment if known else "Signed up", "customer": customer}
+	if known and until:
+		values["paid_until"] = until
 	upsert(email, **values)
 
 
@@ -206,7 +261,9 @@ def pull_clients(settings=None) -> dict:
 			pass
 	count = 0
 	for row in rows:
-		if not isinstance(row, dict) or not row.get("email"):
+		if not isinstance(row, dict):
+			continue
+		if not (row.get("email") or row.get("id")):
 			continue
 		record_client(
 			row.get("email"),
@@ -218,6 +275,37 @@ def pull_clients(settings=None) -> dict:
 		count += 1
 	frappe.db.commit()
 	return {"synced": count}
+
+
+@frappe.whitelist()
+def bridge_control(command: str) -> dict:
+	"""Run one command on the bridge server: status, logs, start, stop, restart, backup, or update."""
+	if "System Manager" not in frappe.get_roles():
+		frappe.throw("Only a System Manager can control the bridge.", frappe.PermissionError)
+	allowed = {"status", "logs", "start", "stop", "restart", "backup", "update"}
+	if command not in allowed:
+		frappe.throw(f"That bridge command is not available: {command}")
+	settings = frappe.get_single("AgentX Settings")
+	url = (settings.bridge_url or "").strip().rstrip("/")
+	token = settings.get_password("bridge_api_token", raise_exception=False) if url else ""
+	if not (url and token):
+		frappe.throw("Set the bridge URL and API token first.")
+	try:
+		response = requests.post(
+			f"{url}/api/control",
+			headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+			json={"command": command},
+			timeout=40,
+		)
+	except requests.RequestException as exc:
+		frappe.throw(f"The bridge did not answer: {exc}")
+	try:
+		body = response.json()
+	except ValueError:
+		body = {}
+	if response.status_code >= 400 or body.get("ok") is False:
+		frappe.throw(body.get("error") or body.get("message") or f"The bridge refused that ({response.status_code}).")
+	return body
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -234,7 +322,7 @@ def sync_client() -> dict:
 	record_client(
 		body.get("email"),
 		body.get("client_id") or "",
-		payment=body.get("payment") or "Trial",
+		payment=body.get("payment") or "",
 		trial_until=body.get("trial_until"),
 		paid_until=body.get("paid_until"),
 	)

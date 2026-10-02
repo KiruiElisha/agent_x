@@ -40,6 +40,46 @@ frappe.ui.form.on("AgentX Settings", {
 			);
 		}
 
+		if (frm.doc.bridge_url) {
+			[
+				["status", __("Status"), false],
+				["logs", __("Logs"), false],
+				["start", __("Start"), true],
+				["stop", __("Stop"), true],
+				["restart", __("Restart"), true],
+				["update", __("Update"), true],
+				["backup", __("Backup sessions"), true],
+			].forEach(([command, label, confirm]) => {
+				frm.add_custom_button(
+					label,
+					() => {
+						const run = () => {
+							frappe.call({
+								method: "agent_x.billing.bridge_control",
+								args: { command },
+								freeze: true,
+								freeze_message: label,
+								callback(result) {
+									const output = (result.message || {}).output || __("Done.");
+									frappe.msgprint({
+										title: label,
+										message: `<pre style="white-space:pre-wrap">${frappe.utils.escape_html(output)}</pre>`,
+										indicator: "blue",
+									});
+								},
+							});
+						};
+						if (confirm) {
+							frappe.confirm(__("Run {0} on the bridge server?", [label]), run);
+							return;
+						}
+						run();
+					},
+					__("Bridge"),
+				);
+			});
+		}
+
 		if (frm.doc.webhook_url) {
 			frm.set_df_property(
 				"webhook_url",
@@ -196,7 +236,7 @@ function sync_clients(frm) {
 		callback(result) {
 			const count = (result.message || {}).synced || 0;
 			frappe.show_alert({
-				message: __("{0} clients were copied onto Bridge Subscription, including trial and paid status.", [count]),
+				message: __("{0} clients are on Bridge Subscription, and each one has a Customer.", [count]),
 				indicator: "green",
 			});
 		},

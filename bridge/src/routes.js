@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import express from "express";
 
 import { requireAdmin, requireToken } from "./auth.js";
+import { runControl } from "./control.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { getAdminEmail, setAdminEmail } from "./adminStore.js";
@@ -326,6 +327,25 @@ export function buildRouter(manager) {
 		wrap(async (req, res) => {
 			const saved = await setAdminEmail((req.body || {}).email);
 			return res.json({ ok: true, configured: true, email: saved });
+		}),
+	);
+
+	router.post(
+		"/control",
+		requireAdmin,
+		wrap(async (req, res) => {
+			const command = String((req.body || {}).command || "");
+			const slow = command === "restart" || command === "stop" || command === "update";
+			if (slow) {
+				res.json({
+					ok: true,
+					command,
+					output: "The command has started. The bridge may stop answering until it finishes.",
+				});
+				runControl(command).catch((error) => logger.warn({ err: error.message, command }, "bridge command failed"));
+				return;
+			}
+			return res.json({ ok: true, ...(await runControl(command)) });
 		}),
 	);
 

@@ -160,6 +160,18 @@
   {
    "dependencies": "",
    "hidden": 0,
+   "icon": "users",
+   "is_query_report": 0,
+   "label": "Subscriptions",
+   "link_count": 0,
+   "link_to": "Bridge Subscription",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
    "icon": "education",
    "is_query_report": 0,
    "label": "Agent Knowledge",

@@ -111,7 +111,13 @@ def verify_signature(settings, raw: bytes) -> bool:
 		)
 		return False
 
-	provided = frappe.get_request_header("X-AgentX-Signature") or ""
+	# The bridge, and gateway webhooks imported from it, sign with
+	# X-AgentX-Signature; the standalone gateway's own header is X-Webhook-Signature.
+	provided = (
+		frappe.get_request_header("X-AgentX-Signature")
+		or frappe.get_request_header("X-Webhook-Signature")
+		or ""
+	)
 	if provided.startswith("sha256="):
 		provided = provided[7:]
 

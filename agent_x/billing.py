@@ -105,6 +105,15 @@ def push_to_bridge(settings) -> None:
 			title="Bridge",
 		)
 		return
+	if response.status_code == 404:
+		# A WA Gateway, not the old bridge: it keeps plans and IntaSend itself.
+		frappe.msgprint(
+			"Saved here. Your WhatsApp gateway now manages plans and IntaSend itself: "
+			"change them in its dashboard (Settings → Billing) or on nergai's WhatsApp page.",
+			indicator="blue",
+			title="WhatsApp gateway",
+		)
+		return
 	if response.status_code >= 400:
 		frappe.msgprint(
 			f"Subscriptions were saved here, but the bridge returned {response.status_code}.",

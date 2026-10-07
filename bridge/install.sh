@@ -15,6 +15,57 @@
 
 set -euo pipefail
 
+# ----------------------------------------------------------------- hand-over
+#
+# The bridge is now WA Gateway: the same WhatsApp engine with a dashboard,
+# accounts, sign-in codes, IntaSend billing and ERPNext invoicing, in its own
+# repository. Its installer moves this bridge over in place: same address,
+# master token, webhooks, clients and their tokens, paid and trial dates, and
+# every WhatsApp login. AgentX and the nergai admin need no changes.
+#
+# The move only happens when someone asks for it: run this installer (or
+# `agentx-bridge update`) from a terminal and answer yes, or set
+# AGENTX_MIGRATE=1. The daily auto-update has no terminal, so it keeps
+# updating the bridge as before and never migrates on its own.
+# AGENTX_LEGACY_BRIDGE=1 always installs the old bridge.
+
+GATEWAY_INSTALLER="${GATEWAY_INSTALLER_URL:-https://raw.githubusercontent.com/KiruiElisha/wa-gateway/main/install.sh}"
+
+handover() {
+	local here="" answer="" installer
+	if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+		here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+	fi
+	installer=$(mktemp)
+	curl -fsSL "$GATEWAY_INSTALLER" -o "$installer" ||
+		{ echo "xx  Could not download $GATEWAY_INSTALLER" >&2; exit 1; }
+	# --yes: the question was asked here already.
+	if [ -n "$here" ] && [ -f "$here/.env" ] && [ ! -f "$here/.migrated-to" ]; then
+		exec bash "$installer" --yes --from-bridge "$here" "$@"
+	fi
+	exec bash "$installer" --yes "$@"
+}
+
+if [ "${AGENTX_LEGACY_BRIDGE:-0}" != 1 ]; then
+	if [ "${AGENTX_MIGRATE:-0}" = 1 ]; then
+		handover "$@"
+	elif [ -r /dev/tty ] && [ -w /dev/tty ] && [ -t 1 ]; then
+		{
+			echo
+			echo "The AgentX bridge is now WA Gateway, with a dashboard, sign-in codes,"
+			echo "IntaSend billing and ERPNext invoicing. This server can move over now:"
+			echo "same address, tokens, webhooks, clients and WhatsApp logins."
+			echo "WhatsApp is offline for a minute or two while it switches."
+			printf "Move to WA Gateway now? [y/N] "
+		} >/dev/tty
+		IFS= read -r answer </dev/tty || true
+		case "$answer" in
+			[yY]*) handover "$@" ;;
+			*) echo "Keeping the bridge. Run this again, or set AGENTX_MIGRATE=1, to move later." >/dev/tty ;;
+		esac
+	fi
+fi
+
 REPO_URL="${AGENTX_REPO:-https://github.com/KiruiElisha/agent_x.git}"
 BRANCH="${AGENTX_BRANCH:-main}"
 INSTALL_DIR="${AGENTX_DIR:-/opt/agentx}"
